@@ -6,19 +6,14 @@
     android:orientation="vertical"
     android:background="#F0F4F8">
 
-    <!-- Top Action Bar Header -->
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:background="#0D4F82"
-        android:elevation="4dp"
         app:title="NSSF Digital Pre-Registration"
-        app:titleTextColor="#FFFFFF"
-        app:subtitle="Member Data Capture Tool"
-        app:subtitleTextColor="#D0E4F5" />
+        app:titleTextColor="#FFFFFF" />
 
-    <!-- Native Tab Bar -->
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tabLayout"
         android:layout_width="match_parent"
@@ -28,10 +23,117 @@
         app:tabSelectedTextColor="#FFFFFF"
         app:tabTextColor="#A0C4E4" />
 
-    <!-- Main Container View -->
-    <FrameLayout
-        android:id="@+id/container"
+    <!-- Section 1: Scan Mode View -->
+    <LinearLayout
+        android:id="@+id/sectionScan"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:visibility="visible">
+
+        <TextView
+            android:id="@+id/tvScanInstruction"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Photographs the MRZ on the back of the card and decodes it directly. Ensure the text is clear."
+            android:textColor="#333333"
+            android:textSize="14sp"
+            android:layout_marginBottom="16dp" />
+
+        <Button
+            android:id="@+id/btnChoosePhoto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Choose / Take Photo of MRZ"
+            android:backgroundTint="#0D4F82"
+            android:textColor="#FFFFFF" />
+
+        <ImageView
+            android:id="@+id/imgPreview"
+            android:layout_width="match_parent"
+            android:layout_height="250dp"
+            android:layout_marginTop="16dp"
+            android:scaleType="fitCenter"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Section 2: Form Input View -->
+    <ScrollView
+        android:id="@+id/sectionForm"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="SURNAME *" android:textSize="12sp" />
+            <EditText android:id="@+id/etSurname" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textCapCharacters" />
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="GIVEN NAME(S) *" android:textSize="12sp" android:layout_marginTop="12dp" />
+            <EditText android:id="@+id/etGivenName" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textCapCharacters" />
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="OTHER NAME" android:textSize="12sp" android:layout_marginTop="12dp" />
+            <EditText android:id="@+id/etOtherName" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textCapCharacters" />
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="SEX (Male / Female) *" android:textSize="12sp" android:layout_marginTop="12dp" />
+            <EditText android:id="@+id/etSex" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Male" />
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DATE OF BIRTH (YYYY-MM-DD) *" android:textSize="12sp" android:layout_marginTop="12dp" />
+            <EditText android:id="@+id/etDob" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="date" />
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="NATIONAL ID NUMBER (NIN) *" android:textSize="12sp" android:layout_marginTop="12dp" />
+            <EditText android:id="@+id/etNin" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textCapCharacters" />
+
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="PHONE NUMBER *" android:textSize="12sp" android:layout_marginTop="12dp" />
+            <EditText android:id="@+id/etPhone" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="phone" />
+
+            <Button
+                android:id="@+id/btnSaveRecord"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="Save Record (100% Offline)"
+                android:backgroundTint="#0A7044"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Section 3: Records View -->
+    <LinearLayout
+        android:id="@+id/sectionRecords"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvRecordsCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Saved Offline Member Records (0)"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btnExportCsv"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Export Records to CSV File"
+            android:backgroundTint="#0D4F82"
+            android:textColor="#FFFFFF"
+            android:layout_marginBottom="16dp" />
+
+        <ListView
+            android:id="@+id/lvRecords"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </LinearLayout>
 
 </LinearLayout>

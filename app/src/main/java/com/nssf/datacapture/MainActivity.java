@@ -33,9 +33,18 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     private TabLayout tabLayout;
-    private FrameLayout container;
 
-    // Form inputs
+    // View Containers
+    private View sectionScan;
+    private View sectionForm;
+    private View sectionRecords;
+
+    // Scan Mode UI
+    private TextView tvScanInstruction;
+    private Button btnChoosePhoto;
+    private ImageView imgPreview;
+
+    // Form Inputs
     private EditText etSurname;
     private EditText etGivenName;
     private EditText etOtherName;
@@ -43,10 +52,12 @@ public class MainActivity extends AppCompatActivity {
     private EditText etDob;
     private EditText etNin;
     private EditText etPhone;
-    private Button btnSave;
-    private Button btnScanPhoto;
-    private TextView tvScanStatus;
-    private ImageView imgPreview;
+    private Button btnSaveRecord;
+
+    // Records Mode UI
+    private TextView tvRecordsCount;
+    private Button btnExportCsv;
+    private ListView lvRecords;
 
     private final List<CardRecord> savedRecords = new ArrayList<>();
 
@@ -65,17 +76,48 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        tabLayout = findViewById(R.id.tabLayout);
-        container = findViewById(R.id.container);
+        bindViews();
+        setupTabLayout();
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 101);
         }
-
-        setupNativeUi();
     }
 
-    private void setupNativeUi() {
+    private void bindViews() {
+        tabLayout = findViewById(R.id.tabLayout);
+        sectionScan = findViewById(R.id.sectionScan);
+        sectionForm = findViewById(R.id.sectionForm);
+        sectionRecords = findViewById(R.id.sectionRecords);
+
+        tvScanInstruction = findViewById(R.id.tvScanInstruction);
+        btnChoosePhoto = findViewById(R.id.btnChoosePhoto);
+        imgPreview = findViewById(R.id.imgPreview);
+
+        etSurname = findViewById(R.id.etSurname);
+        etGivenName = findViewById(R.id.etGivenName);
+        etOtherName = findViewById(R.id.etOtherName);
+        etSex = findViewById(R.id.etSex);
+        etDob = findViewById(R.id.etDob);
+        etNin = findViewById(R.id.etNin);
+        etPhone = findViewById(R.id.etPhone);
+        btnSaveRecord = findViewById(R.id.btnSaveRecord);
+
+        tvRecordsCount = findViewById(R.id.tvRecordsCount);
+        btnExportCsv = findViewById(R.id.btnExportCsv);
+        lvRecords = findViewById(R.id.lvRecords);
+
+        btnChoosePhoto.setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("image/*");
+            photoPickerLauncher.launch(intent);
+        });
+
+        btnSaveRecord.setOnClickListener(v -> saveRecordFromInputs());
+        btnExportCsv.setOnClickListener(v -> exportRecordsToCsv());
+    }
+
+    private void setupTabLayout() {
         tabLayout.removeAllTabs();
         tabLayout.addTab(tabLayout.newTab().setText("Scan MRZ"));
         tabLayout.addTab(tabLayout.newTab().setText("Manual Form"));
@@ -84,128 +126,61 @@ public class MainActivity extends AppCompatActivity {
         tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
             @Override
             public void onTabSelected(TabLayout.Tab tab) {
-                int pos = tab.getPosition();
-                if (pos == 0) showScanMode();
-                else if (pos == 1) showFormMode(null);
-                else if (pos == 2) showRecordsMode();
+                switch (tab.getPosition()) {
+                    case 0:
+                        showSection(sectionScan);
+                        break;
+                    case 1:
+                        showSection(sectionForm);
+                        break;
+                    case 2:
+                        showSection(sectionRecords);
+                        updateRecordsView();
+                        break;
+                }
             }
             @Override public void onTabUnselected(TabLayout.Tab tab) {}
             @Override public void onTabReselected(TabLayout.Tab tab) {}
         });
 
-        showScanMode();
+        showSection(sectionScan);
     }
 
-    private void showScanMode() {
-        container.removeAllViews();
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(32, 32, 32, 32);
-
-        tvScanStatus = new TextView(this);
-        tvScanStatus.setText("Photographs the MRZ on the back of the card and decodes it directly. Ensure the text is clear.");
-        tvScanStatus.setTextSize(14f);
-        tvScanStatus.setPadding(0, 0, 0, 24);
-
-        imgPreview = new ImageView(this);
-        imgPreview.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 500));
-        imgPreview.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        imgPreview.setVisibility(View.GONE);
-
-        btnScanPhoto = new Button(this);
-        btnScanPhoto.setText("Choose / Take Photo");
-        btnScanPhoto.setBackgroundColor(0xFF0D4F82);
-        btnScanPhoto.setTextColor(0xFFFFFFFF);
-        btnScanPhoto.setOnClickListener(v -> {
-            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-            intent.setType("image/*");
-            photoPickerLauncher.launch(intent);
-        });
-
-        layout.addView(tvScanStatus);
-        layout.addView(btnScanPhoto);
-        layout.addView(imgPreview);
-
-        container.addView(layout);
+    private void showSection(View targetSection) {
+        sectionScan.setVisibility(View.GONE);
+        sectionForm.setVisibility(View.GONE);
+        sectionRecords.setVisibility(View.GONE);
+        targetSection.setVisibility(View.VISIBLE);
     }
 
-    private void showFormMode(CardRecord autoRecord) {
-        container.removeAllViews();
-        ScrollView scrollView = new ScrollView(this);
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(32, 32, 32, 32);
-
-        etSurname = createInput("SURNAME *", autoRecord != null ? autoRecord.surname : "", layout);
-        etGivenName = createInput("GIVEN NAME(S) *", autoRecord != null ? autoRecord.givenName : "", layout);
-        etOtherName = createInput("OTHER NAME", autoRecord != null ? autoRecord.otherName : "", layout);
-        etSex = createInput("SEX (Male / Female) *", autoRecord != null ? autoRecord.sex : "Male", layout);
-        etDob = createInput("DATE OF BIRTH (YYYY-MM-DD) *", autoRecord != null ? autoRecord.dateOfBirth : "", layout);
-        etNin = createInput("NATIONAL ID NUMBER (NIN) *", autoRecord != null ? autoRecord.nin : "", layout);
-        etPhone = createInput("PHONE NUMBER *", autoRecord != null ? autoRecord.phoneNumber : "", layout);
-
-        btnSave = new Button(this);
-        btnSave.setText("Save Record (100% Offline)");
-        btnSave.setBackgroundColor(0xFF0A7044);
-        btnSave.setTextColor(0xFFFFFFFF);
-        btnSave.setOnClickListener(v -> saveRecordFromInputs());
-        layout.addView(btnSave);
-
-        scrollView.addView(layout);
-        container.addView(scrollView);
+    private void fillFormFields(CardRecord record) {
+        if (record == null) return;
+        etSurname.setText(record.surname);
+        etGivenName.setText(record.givenName);
+        etOtherName.setText(record.otherName);
+        etSex.setText(record.sex);
+        etDob.setText(record.dateOfBirth);
+        etNin.setText(record.nin);
+        showSection(sectionForm);
+        TabLayout.Tab tab = tabLayout.getTabAt(1);
+        if (tab != null) tab.select();
     }
 
-    private EditText createInput(String label, String initialVal, LinearLayout parent) {
-        TextView tv = new TextView(this);
-        tv.setText(label);
-        tv.setTextSize(12f);
-        tv.setPadding(0, 16, 0, 4);
-
-        EditText et = new EditText(this);
-        et.setText(initialVal);
-        et.setTextSize(14f);
-
-        parent.addView(tv);
-        parent.addView(et);
-        return et;
-    }
-
-    private void showRecordsMode() {
-        container.removeAllViews();
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(32, 32, 32, 32);
-
-        TextView tvHeader = new TextView(this);
-        tvHeader.setText("Saved Offline Member Records (" + savedRecords.size() + ")");
-        tvHeader.setTextSize(16f);
-        tvHeader.setPadding(0, 0, 0, 16);
-        layout.addView(tvHeader);
-
-        Button btnExport = new Button(this);
-        btnExport.setText("Export Records to CSV File");
-        btnExport.setBackgroundColor(0xFF0D4F82);
-        btnExport.setTextColor(0xFFFFFFFF);
-        btnExport.setOnClickListener(v -> exportRecordsToCsv());
-        layout.addView(btnExport);
-
-        ListView listView = new ListView(this);
+    private void updateRecordsView() {
+        tvRecordsCount.setText("Saved Offline Member Records (" + savedRecords.size() + ")");
         List<String> items = new ArrayList<>();
         for (CardRecord r : savedRecords) {
             items.add(r.surname + " " + r.givenName + " - NIN: " + r.nin + " (" + r.phoneNumber + ")");
         }
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, items);
-        listView.setAdapter(adapter);
-        layout.addView(listView);
-
-        container.addView(layout);
+        lvRecords.setAdapter(adapter);
     }
 
     private void processImageUriForMrz(Uri uri) {
         try {
             imgPreview.setImageURI(uri);
             imgPreview.setVisibility(View.VISIBLE);
-            tvScanStatus.setText("Reading MRZ text on-device with Google ML Kit...");
+            tvScanInstruction.setText("Reading MRZ text on-device with Google ML Kit...");
 
             InputImage image = InputImage.fromFilePath(this, uri);
             TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
@@ -219,11 +194,13 @@ public class MainActivity extends AppCompatActivity {
                         CardRecord parsedRecord = UgandaIdParser.parseMrzLines(lines);
 
                         if (parsedRecord != null) {
-                            tvScanStatus.setText("MRZ Decoded Successfully!");
-                            showFormMode(parsedRecord);
+                            tvScanInstruction.setText("MRZ Decoded Successfully!");
+                            fillFormFields(parsedRecord);
                         } else {
-                            tvScanStatus.setText("Could not decode MRZ text. Please enter details manually.");
-                            showFormMode(null);
+                            tvScanInstruction.setText("Could not decode MRZ text. Please enter details manually.");
+                            showSection(sectionForm);
+                            TabLayout.Tab tab = tabLayout.getTabAt(1);
+                            if (tab != null) tab.select();
                         }
                     }
                 })
@@ -231,14 +208,16 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onFailure(@NonNull Exception e) {
                         Log.e("NSSF_MRZ", "MRZ OCR Failure", e);
-                        tvScanStatus.setText("MRZ OCR Error: " + e.getMessage() + ". Please enter details manually.");
-                        showFormMode(null);
+                        tvScanInstruction.setText("MRZ OCR Error: " + e.getMessage() + ". Please enter details manually.");
+                        showSection(sectionForm);
+                        TabLayout.Tab tab = tabLayout.getTabAt(1);
+                        if (tab != null) tab.select();
                     }
                 });
 
         } catch (Exception e) {
             Log.e("NSSF_MRZ", "Image process error", e);
-            tvScanStatus.setText("Error processing image: " + e.getMessage());
+            tvScanInstruction.setText("Error processing image: " + e.getMessage());
         }
     }
 
