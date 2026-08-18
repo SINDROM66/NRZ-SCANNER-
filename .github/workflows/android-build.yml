@@ -5,10 +5,6 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
-env:
-  ANDROID_HOME: /usr/local/lib/android/sdk
-  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-
 jobs:
   build-apk:
     name: Compile Pure Native Android APK (.apk)
@@ -24,10 +20,8 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK & Install Platforms 34
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: 'platforms;android-34 build-tools;34.0.0'
 
       - name: Setup Gradle 8.4
         uses: gradle/actions/setup-gradle@v4
