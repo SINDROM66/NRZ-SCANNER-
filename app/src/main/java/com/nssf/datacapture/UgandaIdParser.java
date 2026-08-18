@@ -198,6 +198,6 @@ public class UgandaIdParser {
             }
         }
 
-        return new CardRecord(surname, givenName, otherName, sex, dob, nin, "", "", "Native Google ML Kit MRZ OCR");
+        return new CardRecord(surname, givenName, otherName, sex, dob, nin, cardNumber, "", "Native Google ML Kit MRZ OCR");
     }
 }

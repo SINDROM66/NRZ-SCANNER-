@@ -187,34 +187,34 @@ public class MainActivity extends AppCompatActivity {
             TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
 
             recognizer.process(image)
-                .addOnSuccessListener(new OnSuccessListener<Text>() {
-                    @Override
-                    public void onSuccess(Text visionText) {
-                        String text = visionText.getText();
-                        List<String> lines = Arrays.asList(text.split("\n"));
-                        CardRecord parsedRecord = UgandaIdParser.parseMrzLines(lines);
+                    .addOnSuccessListener(new OnSuccessListener<Text>() {
+                        @Override
+                        public void onSuccess(Text visionText) {
+                            String text = visionText.getText();
+                            List<String> lines = Arrays.asList(text.split("\n"));
+                            CardRecord parsedRecord = UgandaIdParser.parseMrzLines(lines);
 
-                        if (parsedRecord != null) {
-                            tvScanInstruction.setText("MRZ Decoded Successfully!");
-                            fillFormFields(parsedRecord);
-                        } else {
-                            tvScanInstruction.setText("Could not decode MRZ text. Please enter details manually.");
+                            if (parsedRecord != null) {
+                                tvScanInstruction.setText("MRZ Decoded Successfully!");
+                                fillFormFields(parsedRecord);
+                            } else {
+                                tvScanInstruction.setText("Could not decode MRZ text. Please enter details manually.");
+                                showSection(sectionForm);
+                                TabLayout.Tab tab = tabLayout.getTabAt(1);
+                                if (tab != null) tab.select();
+                            }
+                        }
+                    })
+                    .addOnFailureListener(new OnFailureListener() {
+                        @Override
+                        public void onFailure(@NonNull Exception e) {
+                            Log.e("NSSF_MRZ", "MRZ OCR Failure", e);
+                            tvScanInstruction.setText("MRZ OCR Error: " + e.getMessage() + ". Please enter details manually.");
                             showSection(sectionForm);
                             TabLayout.Tab tab = tabLayout.getTabAt(1);
                             if (tab != null) tab.select();
                         }
-                    }
-                })
-                .addOnFailureListener(new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        Log.e("NSSF_MRZ", "MRZ OCR Failure", e);
-                        tvScanInstruction.setText("MRZ OCR Error: " + e.getMessage() + ". Please enter details manually.");
-                        showSection(sectionForm);
-                        TabLayout.Tab tab = tabLayout.getTabAt(1);
-                        if (tab != null) tab.select();
-                    }
-                });
+                    });
 
         } catch (Exception e) {
             Log.e("NSSF_MRZ", "Image process error", e);
@@ -230,14 +230,15 @@ public class MainActivity extends AppCompatActivity {
         }
 
         CardRecord record = new CardRecord(
-            etSurname.getText().toString().trim(),
-            etGivenName.getText().toString().trim(),
-            etOtherName.getText().toString().trim(),
-            etSex.getText().toString().trim(),
-            etDob.getText().toString().trim(),
-            etNin.getText().toString().trim(),
-            phone,
-            "Native Google ML Kit MRZ OCR"
+                etSurname.getText().toString().trim(),
+                etGivenName.getText().toString().trim(),
+                etOtherName.getText().toString().trim(),
+                etSex.getText().toString().trim(),
+                etDob.getText().toString().trim(),
+                etNin.getText().toString().trim(),
+                "",          // cardNumber (manual entry has no card number)
+                phone,
+                "Native Google ML Kit MRZ OCR"
         );
 
         savedRecords.add(record);
@@ -254,15 +255,15 @@ public class MainActivity extends AppCompatActivity {
 
         StringBuilder csv = new StringBuilder("SURNAME,GIVEN_NAME,OTHER_NAME,SEX,DATE_OF_BIRTH,NATIONALITY,NIN,PHONE_NUMBER,SOURCE\n");
         for (CardRecord r : savedRecords) {
-            csv.append("\"").append(r.surname).append("\",")
-               .append("\"").append(r.givenName).append("\",")
-               .append("\"").append(r.otherName).append("\",")
-               .append("\"").append(r.sex).append("\",")
-               .append("\"").append(r.dateOfBirth).append("\",")
-               .append("\"UGA\",")
-               .append("\"").append(r.nin).append("\",")
-               .append("\"").append(r.phoneNumber).append("\",")
-               .append("\"").append(r.source).append("\"\n");
+            csv.append("\"").append(r.surname).append("\",");
+            csv.append("\"").append(r.givenName).append("\",");
+            csv.append("\"").append(r.otherName).append("\",");
+            csv.append("\"").append(r.sex).append("\",");
+            csv.append("\"").append(r.dateOfBirth).append("\",");
+            csv.append("\"UGA\",");
+            csv.append("\"").append(r.nin).append("\",");
+            csv.append("\"").append(r.phoneNumber).append("\",");
+            csv.append("\"").append(r.source).append("\"\n");
         }
 
         String fileName = "nssf_member_records_" + System.currentTimeMillis() + ".csv";

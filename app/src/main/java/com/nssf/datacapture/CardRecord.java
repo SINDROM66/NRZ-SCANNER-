@@ -13,13 +13,16 @@ public class CardRecord {
 
     public CardRecord() {}
 
-    public CardRecord(String surname, String givenName, String otherName, String sex, String dateOfBirth, String nin, String phoneNumber, String source) {
+    public CardRecord(String surname, String givenName, String otherName, String sex,
+                      String dateOfBirth, String nin, String cardNumber,
+                      String phoneNumber, String source) {
         this.surname = surname;
         this.givenName = givenName;
         this.otherName = otherName;
         this.sex = sex;
         this.dateOfBirth = dateOfBirth;
         this.nin = nin;
+        this.cardNumber = cardNumber;
         this.phoneNumber = phoneNumber;
         this.source = source;
     }
