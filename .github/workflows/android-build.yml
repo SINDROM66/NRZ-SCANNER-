@@ -34,18 +34,11 @@ jobs:
           mkdir -p app/src/main/assets
           cp -r index.html css js manifest.json sw.js app/src/main/assets/
 
-      - name: Setup Gradle 8.4
+      - name: Setup Gradle 8.4 & Run assembleDebug
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.4'
-
-      - name: Generate Executable Gradle Wrapper
-        run: |
-          gradle wrapper --gradle-version 8.4
-          chmod +x gradlew
-
-      - name: Build Debug APK with Gradle
-        run: ./gradlew assembleDebug --stacktrace --info
+          arguments: assembleDebug --stacktrace
 
       - name: Upload Native Android APK Artifact (.apk)
         uses: actions/upload-artifact@v4
