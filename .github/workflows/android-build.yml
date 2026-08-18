@@ -24,10 +24,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.4'
-          generate-job-summary: always
+          add-job-summary: 'always'
 
       - name: Build Pure Native Debug APK with Gradle
-        run: gradle assembleDebug --stacktrace --info
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload Native Android APK Artifact (.apk)
         uses: actions/upload-artifact@v4
