@@ -59,6 +59,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvRecordsCount;
     private Button btnExportCsv;
     private ListView lvRecords;
+    private ExecutorService cameraExecutor;
+    private TextRecognizer recognizer;
 
     private final List<CardRecord> savedRecords = new ArrayList<>();
 
@@ -77,11 +79,25 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        cameraExecutor = Executors.newSingleThreadExecutor();
+        recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+
         bindViews();
         setupTabLayout();
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 101);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (recognizer != null) {
+            recognizer.close();
+        }
+        if (cameraExecutor != null) {
+            cameraExecutor.shutdown();
         }
     }
 
@@ -183,60 +199,78 @@ public class MainActivity extends AppCompatActivity {
             imgPreview.setVisibility(View.VISIBLE);
             tvScanInstruction.setText("Reading MRZ text on-device with Google ML Kit...");
 
-            InputImage image = InputImage.fromFilePath(this, uri);
-            TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+            cameraExecutor.execute(() -> {
+                try {
+                    InputImage image = InputImage.fromFilePath(this, uri);
+                    recognizer.process(image)
+                            .addOnSuccessListener(cameraExecutor, new OnSuccessListener<Text>() {
+                                @Override
+                                public void onSuccess(Text visionText) {
+                                    String text = visionText.getText();
+                                    List<String> lines = Arrays.asList(text.split("\n"));
+                                    CardRecord parsedRecord = UgandaIdParser.parseMrzLines(lines);
 
-            recognizer.process(image)
-                    .addOnSuccessListener(new OnSuccessListener<Text>() {
-                        @Override
-                        public void onSuccess(Text visionText) {
-                            String text = visionText.getText();
-                            List<String> lines = Arrays.asList(text.split("\n"));
-                            CardRecord parsedRecord = UgandaIdParser.parseMrzLines(lines);
-
-                            if (parsedRecord != null) {
-                                tvScanInstruction.setText("MRZ Decoded Successfully!");
-                                fillFormFields(parsedRecord);
-                            } else {
-                                tvScanInstruction.setText("Could not decode MRZ text. Please enter details manually.");
-                                showSection(sectionForm);
-                                TabLayout.Tab tab = tabLayout.getTabAt(1);
-                                if (tab != null) tab.select();
-                            }
-                        }
-                    })
-                    .addOnFailureListener(new OnFailureListener() {
-                        @Override
-                        public void onFailure(@NonNull Exception e) {
-                            Log.e("NSSF_MRZ", "MRZ OCR Failure", e);
-                            tvScanInstruction.setText("MRZ OCR Error: " + e.getMessage() + ". Please enter details manually.");
-                            showSection(sectionForm);
-                            TabLayout.Tab tab = tabLayout.getTabAt(1);
-                            if (tab != null) tab.select();
-                        }
+                                    runOnUiThread(() -> {
+                                        if (parsedRecord != null) {
+                                            tvScanInstruction.setText("MRZ Decoded Successfully!");
+                                            fillFormFields(parsedRecord);
+                                        } else {
+                                            tvScanInstruction.setText("Could not decode MRZ text. Please enter details manually.");
+                                            showSection(sectionForm);
+                                            TabLayout.Tab tab = tabLayout.getTabAt(1);
+                                            if (tab != null) tab.select();
+                                        }
+                                    });
+                                }
+                            })
+                            .addOnFailureListener(cameraExecutor, new OnFailureListener() {
+                                @Override
+                                public void onFailure(@NonNull Exception e) {
+                                    Log.e("NSSF_MRZ", "MRZ OCR Failure", e);
+                                    runOnUiThread(() -> {
+                                        tvScanInstruction.setText("MRZ OCR Error: " + e.getMessage() + ". Please enter details manually.");
+                                        showSection(sectionForm);
+                                        TabLayout.Tab tab = tabLayout.getTabAt(1);
+                                        if (tab != null) tab.select();
+                                    });
+                                }
+                            });
+                } catch (Exception e) {
+                    Log.e("NSSF_MRZ", "Image process error", e);
+                    runOnUiThread(() -> {
+                        tvScanInstruction.setText("Error processing image: " + e.getMessage());
                     });
+                }
+            });
 
         } catch (Exception e) {
             Log.e("NSSF_MRZ", "Image process error", e);
-            tvScanInstruction.setText("Error processing image: " + e.getMessage());
+            tvScanInstruction.setText("Error opening photo: " + e.getMessage());
         }
     }
 
     private void saveRecordFromInputs() {
+        String surname = etSurname.getText().toString().trim();
+        String givenName = etGivenName.getText().toString().trim();
+        String otherName = etOtherName.getText().toString().trim();
+        String sex = etSex.getText().toString().trim();
+        String dob = etDob.getText().toString().trim();
+        String nin = etNin.getText().toString().trim();
         String phone = etPhone.getText().toString().trim();
-        if (phone.isEmpty()) {
-            Toast.makeText(this, "❗ Phone Number is mandatory!", Toast.LENGTH_SHORT).show();
+
+        if (surname.isEmpty() || givenName.isEmpty() || nin.isEmpty()) {
+            Toast.makeText(this, "Please ensure Surname, Given Name, and NIN are filled.", Toast.LENGTH_SHORT).show();
             return;
         }
 
         CardRecord record = new CardRecord(
-                etSurname.getText().toString().trim(),
-                etGivenName.getText().toString().trim(),
-                etOtherName.getText().toString().trim(),
-                etSex.getText().toString().trim(),
-                etDob.getText().toString().trim(),
-                etNin.getText().toString().trim(),
-                "",          // cardNumber (manual entry has no card number)
+                surname,
+                givenName,
+                otherName,
+                sex,
+                dob,
+                nin,
+                "",          // cardNumber
                 phone,
                 "Native Google ML Kit MRZ OCR"
         );
@@ -253,7 +287,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        StringBuilder csv = new StringBuilder("SURNAME,GIVEN_NAME,OTHER_NAME,SEX,DATE_OF_BIRTH,NATIONALITY,NIN,PHONE_NUMBER,SOURCE\n");
+        StringBuilder csv = new StringBuilder("SURNAME,GIVEN_NAME,OTHER_NAME,SEX,DATE_OF_BIRTH,NATIONALITY,NIN,CARD_NUMBER,PHONE_NUMBER,SOURCE\n");
         for (CardRecord r : savedRecords) {
             csv.append("\"").append(r.surname).append("\",");
             csv.append("\"").append(r.givenName).append("\",");
@@ -262,6 +296,7 @@ public class MainActivity extends AppCompatActivity {
             csv.append("\"").append(r.dateOfBirth).append("\",");
             csv.append("\"UGA\",");
             csv.append("\"").append(r.nin).append("\",");
+            csv.append("\"").append(r.cardNumber).append("\",");
             csv.append("\"").append(r.phoneNumber).append("\",");
             csv.append("\"").append(r.source).append("\"\n");
         }

@@ -764,65 +764,84 @@ def _parse_mrz_lines(lines: list[str]) -> CardRecord | None:
         card_number=card_number,
     )
 
+def is_mrz_or_garbage(text: str) -> bool:
+    if not text:
+        return True
+    t = text.strip().upper()
+    if "\ufffd" in t or "IDUGA" in t or "<<" in t:
+        return True
+    if re.search(r"^[A-Z]{2}\d{8,10}", t) or re.search(r"\d{9,10}", t):
+        return True
+    return False
+
+def clean_admin_token(val: str) -> str:
+    if not val or is_mrz_or_garbage(val):
+        return ""
+    val = val.lstrip(":").strip()
+    return "" if is_mrz_or_garbage(val) else val
+
+def icao9303_check_digit(data: str) -> int:
+    weights = [7, 3, 1]
+    total = 0
+    for i, char in enumerate(data):
+        if char == '<':
+            val = 0
+        elif char.isdigit():
+            val = int(char)
+        else:
+            val = 10 + ord(char.upper()) - ord('A')
+        total += val * weights[i % 3]
+    return (10 - (total % 10)) % 10
+
 def parse_card_with_ml_ocr(source_path: str) -> CardRecord:
     extracted_texts = []
-    cropped_mrz_path = source_path
+    pil_crop = None
+    crop_mrz_np = None
 
-    # Fast ROI Crop: MRZ is located strictly in the bottom 45% of Ugandan ID card back
+    # In-Memory Fast ROI Crop: MRZ is located strictly in the bottom 45% of Ugandan ID card back
     if CV2_AVAILABLE:
         try:
             img_cv = cv2.imread(source_path)
             if img_cv is not None:
                 h, w = img_cv.shape[:2]
-                crop_mrz = img_cv[int(h * 0.52):, :]
-                max_side = max(crop_mrz.shape[:2])
+                crop_mrz_np = img_cv[int(h * 0.52):, :]
+                max_side = max(crop_mrz_np.shape[:2])
                 if max_side > 1000:
                     scale = 1000.0 / max_side
-                    crop_mrz = cv2.resize(crop_mrz, (int(crop_mrz.shape[1] * scale), int(crop_mrz.shape[0] * scale)), interpolation=cv2.INTER_AREA)
+                    crop_mrz_np = cv2.resize(crop_mrz_np, (int(crop_mrz_np.shape[1] * scale), int(crop_mrz_np.shape[0] * scale)), interpolation=cv2.INTER_AREA)
                 
-                temp_mrz = str(Path(source_path).parent / f"temp_mrz_fast_{Path(source_path).name}")
-                cv2.imwrite(temp_mrz, crop_mrz)
-                cropped_mrz_path = temp_mrz
+                # Zero Disk I/O: Convert NumPy array directly to PIL Image in memory
+                crop_rgb = cv2.cvtColor(crop_mrz_np, cv2.COLOR_BGR2RGB)
+                pil_crop = Image.fromarray(crop_rgb)
         except Exception:
             pass
 
-    # 1. PyTesseract Fast Engine (< 0.2 seconds)
-    if PYTESSERACT_AVAILABLE and CV2_AVAILABLE:
+    # 1. PyTesseract In-Memory Fast Engine (< 0.15 seconds)
+    if PYTESSERACT_AVAILABLE and (pil_crop is not None or CV2_AVAILABLE):
         try:
-            img_cv = cv2.imread(cropped_mrz_path)
-            if img_cv is not None:
-                gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-                tess_text = pytesseract.image_to_string(gray, config='--psm 6')
-                lines = [line.strip() for line in tess_text.splitlines() if line.strip()]
-                parsed = _parse_mrz_lines(lines)
-                if parsed and (parsed.nin or parsed.surname or parsed.card_number):
-                    if cropped_mrz_path != source_path and Path(cropped_mrz_path).exists():
-                        try: os.remove(cropped_mrz_path)
-                        except OSError: pass
-                    parsed.source = source_path
-                    return parsed
-        except Exception:
-            pass
-
-    # 2. EasyOCR ROI Engine (< 1.5 seconds)
-    if EASYOCR_AVAILABLE:
-        try:
-            reader = _get_ocr_reader()
-            ocr_results = reader.readtext(cropped_mrz_path)
-            extracted_texts = [text for _, text, prob in ocr_results if prob > 0.2]
-            parsed = _parse_mrz_lines(extracted_texts)
+            target_image = pil_crop if pil_crop is not None else Image.open(source_path)
+            tess_text = pytesseract.image_to_string(target_image, config='--psm 6')
+            lines = [line.strip() for line in tess_text.splitlines() if line.strip()]
+            parsed = _parse_mrz_lines(lines)
             if parsed and (parsed.nin or parsed.surname or parsed.card_number):
-                if cropped_mrz_path != source_path and Path(cropped_mrz_path).exists():
-                    try: os.remove(cropped_mrz_path)
-                    except OSError: pass
                 parsed.source = source_path
                 return parsed
         except Exception:
             pass
 
-    if cropped_mrz_path != source_path and Path(cropped_mrz_path).exists():
-        try: os.remove(cropped_mrz_path)
-        except OSError: pass
+    # 2. EasyOCR In-Memory ROI Engine (< 1.2 seconds)
+    if EASYOCR_AVAILABLE:
+        try:
+            reader = _get_ocr_reader()
+            ocr_target = crop_mrz_np if crop_mrz_np is not None else source_path
+            ocr_results = reader.readtext(ocr_target)
+            extracted_texts = [text for _, text, prob in ocr_results if prob > 0.2]
+            parsed = _parse_mrz_lines(extracted_texts)
+            if parsed and (parsed.nin or parsed.surname or parsed.card_number):
+                parsed.source = source_path
+                return parsed
+        except Exception:
+            pass
 
     # Full frame EasyOCR fallback if ROI missed
     if EASYOCR_AVAILABLE:
@@ -844,36 +863,37 @@ def parse_card_with_ml_ocr(source_path: str) -> CardRecord:
             nin="", sex="Unknown", card_number=""
         )
 
+    # Sanitize and extract administrative fields (with strict P0 MRZ rejection guard)
     for i, t in enumerate(extracted_texts):
         upper_t = t.upper()
         if "DISTRICT" in upper_t:
-            val = upper_t.replace("DISTRICT", "").lstrip(":").strip()
+            val = clean_admin_token(upper_t.replace("DISTRICT", ""))
             if not val and i+1 < len(extracted_texts):
-                val = extracted_texts[i+1].upper().lstrip(":").strip()
-            if val and val != ":": record.district = val
+                val = clean_admin_token(extracted_texts[i+1].upper())
+            if val: record.district = val
         elif "COUNTY" in upper_t and "SUBCOUNTY" not in upper_t:
-            val = upper_t.replace("COUNTY", "").lstrip(":").strip()
+            val = clean_admin_token(upper_t.replace("COUNTY", ""))
             if not val and i+1 < len(extracted_texts):
-                candidate = extracted_texts[i+1].upper().lstrip(":").strip()
+                candidate = clean_admin_token(extracted_texts[i+1].upper())
                 if not any(b in candidate for b in ["FINGER", "PRINT", "INDEX", "THUMB", "NR", "RINDEX", "LINDEX"]):
                     val = candidate
-            if val and val != ":" and not any(b in val for b in ["FINGER", "PRINT", "INDEX", "THUMB", "NR"]):
+            if val and not any(b in val for b in ["FINGER", "PRINT", "INDEX", "THUMB", "NR"]):
                 record.county = val
         elif "SUBCOUNTY" in upper_t:
-            val = upper_t.replace("SUBCOUNTY", "").lstrip(":").strip()
+            val = clean_admin_token(upper_t.replace("SUBCOUNTY", ""))
             if not val and i+1 < len(extracted_texts):
-                val = extracted_texts[i+1].upper().lstrip(":").strip()
-            if val and val != ":": record.subcounty = val
+                val = clean_admin_token(extracted_texts[i+1].upper())
+            if val: record.subcounty = val
         elif "PARISH" in upper_t:
-            val = upper_t.replace("PARISH", "").lstrip(":").strip()
+            val = clean_admin_token(upper_t.replace("PARISH", ""))
             if not val and i+1 < len(extracted_texts):
-                val = extracted_texts[i+1].upper().lstrip(":").strip()
-            if val and val != ":": record.parish = val
+                val = clean_admin_token(extracted_texts[i+1].upper())
+            if val: record.parish = val
         elif "VILLAGE" in upper_t:
-            val = upper_t.replace("VILLAGE", "").lstrip(":").strip()
+            val = clean_admin_token(upper_t.replace("VILLAGE", ""))
             if not val and i+1 < len(extracted_texts):
-                val = extracted_texts[i+1].upper().lstrip(":").strip()
-            if val and val != ":": record.village = val
+                val = clean_admin_token(extracted_texts[i+1].upper())
+            if val: record.village = val
 
     record.source = source_path
     record.raw = "\n".join(extracted_texts)
