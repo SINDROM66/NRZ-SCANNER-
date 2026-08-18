@@ -1,14 +1,10 @@
 package com.nssf.datacapture
 
 import android.Manifest
-import android.content.contentValuesOf
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
-import android.provider.MediaStore
 import android.util.Log
 import android.view.View
 import android.widget.*
@@ -16,7 +12,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.android.material.tabs.TabLayout
-import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -44,7 +39,7 @@ class MainActivity : AppCompatActivity() {
     private val savedRecords = mutableListOf<CardRecord>()
 
     private val selectPhotoLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        uri?.let { processImageUri(it) }
+        uri?.let { processImageUriForMrz(it) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,7 +49,7 @@ class MainActivity : AppCompatActivity() {
         tabLayout = findViewById(R.id.tabLayout)
         container = findViewById(R.id.container)
 
-        // Request Camera & Storage permissions
+        // Request Camera permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.CAMERA), 101)
         }
@@ -63,9 +58,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupNativeUi() {
-        // Inflate Main Form View
-        val view = layoutInflater.inflate(R.layout.activity_main, container, false)
-
         tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
                 when (tab?.position) {
@@ -89,7 +81,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         tvScanStatus = TextView(this).apply {
-            text = "Photographs the MRZ on the back of the card and decodes it directly."
+            text = "Photographs the MRZ on the back of the card and decodes it directly. Ensure the text is clear."
             textSize = 14f
             setPadding(0, 0, 0, 24)
         }
@@ -192,65 +184,38 @@ class MainActivity : AppCompatActivity() {
         container.addView(layout)
     }
 
-    private fun processImageUri(uri: Uri) {
+    private fun processImageUriForMrz(uri: Uri) {
         try {
             imgPreview.setImageURI(uri)
             imgPreview.visibility = View.VISIBLE
-            tvScanStatus.text = "Processing image on-device with ML Kit..."
+            tvScanStatus.text = "Reading MRZ text on-device with Google ML Kit..."
 
             val image = InputImage.fromFilePath(this, uri)
+            val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
-            // Step 1: Try Native Google ML Kit Barcode Reader (PDF417)
-            val scanner = BarcodeScanning.getClient()
-            scanner.process(image)
-                .addOnSuccessListener { barcodes ->
-                    var foundRecord: CardRecord? = null
-                    for (barcode in barcodes) {
-                        val raw = barcode.rawValue
-                        val parsed = UgandaIdParser.parseBarcodePayload(raw)
-                        if (parsed != null) {
-                            foundRecord = parsed
-                            break
-                        }
-                    }
+            recognizer.process(image)
+                .addOnSuccessListener { visionText ->
+                    val lines = visionText.textBlocks.flatMap { block -> block.lines.map { it.text } }
+                    val parsedRecord = UgandaIdParser.parseMrzLines(lines)
 
-                    if (foundRecord != null) {
-                        tvScanStatus.text = "Barcode Decoded Successfully!"
-                        showFormMode(foundRecord)
+                    if (parsedRecord != null) {
+                        tvScanStatus.text = "MRZ Decoded Successfully!"
+                        showFormMode(parsedRecord)
                     } else {
-                        // Step 2: Fallback to Google ML Kit Text Recognizer for 3-Line MRZ OCR
-                        processMrzText(image)
+                        tvScanStatus.text = "Could not decode MRZ text. Please enter details manually."
+                        showFormMode()
                     }
                 }
-                .addOnFailureListener {
-                    processMrzText(image)
+                .addOnFailureListener { e ->
+                    Log.e("NSSF_MRZ", "MRZ OCR Failure", e)
+                    tvScanStatus.text = "MRZ OCR Error: ${e.message}. Please enter details manually."
+                    showFormMode()
                 }
 
         } catch (e: Exception) {
-            Log.e("NSSF_Scanner", "Image process error", e)
+            Log.e("NSSF_MRZ", "Image process error", e)
             tvScanStatus.text = "Error processing image: ${e.message}"
         }
-    }
-
-    private fun processMrzText(image: InputImage) {
-        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-        recognizer.process(image)
-            .addOnSuccessListener { visionText ->
-                val lines = visionText.textBlocks.flatMap { block -> block.lines.map { it.text } }
-                val parsedRecord = UgandaIdParser.parseMrzLines(lines)
-
-                if (parsedRecord != null) {
-                    tvScanStatus.text = "MRZ Decoded Successfully!"
-                    showFormMode(parsedRecord)
-                } else {
-                    tvScanStatus.text = "Could not decode MRZ/Barcode. Please enter details manually."
-                    showFormMode()
-                }
-            }
-            .addOnFailureListener { e ->
-                tvScanStatus.text = "OCR Failed: ${e.message}. Please enter details manually."
-                showFormMode()
-            }
     }
 
     private fun saveRecordFromInputs() {
@@ -267,7 +232,8 @@ class MainActivity : AppCompatActivity() {
             sex = etSex.text.toString().trim(),
             dateOfBirth = etDob.text.toString().trim(),
             nin = etNin.text.toString().trim(),
-            phoneNumber = phone
+            phoneNumber = phone,
+            source = "Native Google ML Kit MRZ OCR"
         )
 
         savedRecords.add(record)
