@@ -34,13 +34,8 @@ jobs:
         with:
           gradle-version: '8.4'
 
-      - name: Generate Executable Gradle Wrapper
-        run: |
-          gradle wrapper --gradle-version 8.4
-          chmod +x gradlew
-
       - name: Build Pure Native Debug APK with Gradle
-        run: ./gradlew assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload Native Android APK Artifact (.apk)
         uses: actions/upload-artifact@v4
