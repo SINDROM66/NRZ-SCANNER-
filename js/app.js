@@ -7,12 +7,37 @@ setupSubNav();
 setupNetworkStatus();
 setupForm();
 setupScannerAndModal();
+setupPWAInstall();
 
 // 2. Register Service Worker
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
         .then(reg => console.log('SW registered', reg))
         .catch(err => console.error('SW init failed', err));
+}
+
+function setupPWAInstall() {
+    let deferredPrompt;
+    const installBtn = document.getElementById('install-btn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (installBtn) installBtn.style.display = 'inline-flex';
+    });
+
+    if (installBtn) {
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`User response to install prompt: ${outcome}`);
+                deferredPrompt = null;
+            } else {
+                alert("To install NSSF Member Data Capture on your phone:\n\n• Chrome (Android): Tap 3 dots menu (⋮) -> Select 'Install app' or 'Add to Home screen'.\n• Safari (iPhone): Tap Share button -> Select 'Add to Home Screen'.");
+            }
+        });
+    }
 }
 
 function setupAuth() {
