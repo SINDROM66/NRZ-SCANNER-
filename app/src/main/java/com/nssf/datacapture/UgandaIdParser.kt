@@ -32,7 +32,7 @@ object UgandaIdParser {
 
     fun cleanMrzNameToken(token: String?): String {
         if (token.isNullOrEmpty()) return ""
-        var s = token.replace('0', 'O').replace('1', 'I').replace('5', 'S').replace('8', 'B')
+        val s = token.replace('0', 'O').replace('1', 'I').replace('5', 'S').replace('8', 'B')
         return s.replace("[^A-Z]".toRegex(), "")
     }
 
@@ -90,53 +90,6 @@ object UgandaIdParser {
         return if (newCand.length == 14) newCand else oldCand
     }
 
-    fun parseBarcodePayload(rawPayload: String?): CardRecord? {
-        if (rawPayload.isNullOrEmpty() || (!rawPayload.contains(";") && !rawPayload.contains("[FNG]"))) {
-            return null
-        }
-        val clean = rawPayload.split("[FNG]")[0]
-        val parts = clean.split(";")
-        if (parts.size < 8) return null
-
-        val surname = decodeBase64Utf8(parts[0])
-        val givenName = decodeBase64Utf8(parts[1])
-        val otherName = decodeBase64Utf8(parts[2])
-        val dobRaw = if (parts.size > 3) parts[3].trim() else ""
-        val ninRaw = if (parts.size > 6) parts[6].trim() else ""
-        val cardNo = if (parts.size > 7) parts[7].trim() else ""
-
-        var dob = ""
-        if (dobRaw.length == 8) {
-            dob = "${dobRaw.substring(4, 8)}-${dobRaw.substring(2, 4)}-${dobRaw.substring(0, 2)}"
-        }
-
-        val nin = normalizeNinCandidate(ninRaw)
-        var sex = "Male"
-        if (nin.startsWith("CF") || nin.startsWith("AF") || nin.startsWith("PF")) {
-            sex = "Female"
-        }
-
-        return CardRecord(
-            surname = surname,
-            givenName = givenName,
-            otherName = otherName,
-            sex = sex,
-            dateOfBirth = dob,
-            nin = nin,
-            cardNumber = cardNo,
-            source = "Native PDF417 Barcode"
-        )
-    }
-
-    private fun decodeBase64Utf8(encoded: String): String {
-        return try {
-            val bytes = Base64.decode(encoded.trim(), Base64.DEFAULT)
-            String(bytes, StandardCharsets.UTF_8)
-        } catch (e: Exception) {
-            encoded.trim().uppercase()
-        }
-    }
-
     fun parseMrzLines(lines: List<String>): CardRecord? {
         val candidates = lines.map { it.trim().replace("\\s+".toRegex(), "").uppercase().replace('€', 'C') }
             .filter { it.contains("UGA") || it.contains("<") || it.contains("CM0") || it.contains("CF0") || it.contains("IDUGA") }
@@ -169,11 +122,11 @@ object UgandaIdParser {
 
         var cardNumber = ""
         var nin = ""
-        val m1Pattern = Pattern.compile("IDUGA(?<cardNo>\\d{9})\\d(?<nin>[A-Z0-9<]{14,15})")
+        val m1Pattern = Pattern.compile("IDUGA(\\d{9})\\d([A-Z0-9<]{14,15})")
         val matcher1 = m1Pattern.matcher(line1)
         if (matcher1.find()) {
-            cardNumber = matcher1.group("cardNo") ?: ""
-            nin = normalizeNinCandidate(matcher1.group("nin")?.replace("<", ""))
+            cardNumber = matcher1.group(1) ?: ""
+            nin = normalizeNinCandidate(matcher1.group(2)?.replace("<", ""))
         } else {
             val cardMatch = Pattern.compile("\\d{9,10}").matcher(line1)
             if (cardMatch.find()) cardNumber = cardMatch.group(0) ?: ""
@@ -184,16 +137,16 @@ object UgandaIdParser {
         var dob = ""
         var sex = "Male"
         if (line2 != null) {
-            val m2Pattern = Pattern.compile("(?<dob>\\d{6})\\d(?<sexChar>[MF<])(?<exp>\\d{6})\\dUGA")
+            val m2Pattern = Pattern.compile("(\\d{6})\\d([MF<])(\\d{6})\\dUGA")
             val matcher2 = m2Pattern.matcher(line2)
             if (matcher2.find()) {
-                val dobStr = matcher2.group("dob") ?: ""
+                val dobStr = matcher2.group(1) ?: ""
                 if (dobStr.length == 6) {
                     val yy = dobStr.substring(0, 2).toIntOrNull() ?: 0
                     val year = if (yy <= 30) 2000 + yy else 1900 + yy
                     dob = "$year-${dobStr.substring(2, 4)}-${dobStr.substring(4, 6)}"
                 }
-                val sexChar = matcher2.group("sexChar")
+                val sexChar = matcher2.group(2)
                 if (sexChar == "F") sex = "Female"
                 else if (sexChar == "M") sex = "Male"
             }
@@ -233,7 +186,7 @@ object UgandaIdParser {
             dateOfBirth = dob,
             nin = nin,
             cardNumber = cardNumber,
-            source = "Native MRZ OCR"
+            source = "Native Google ML Kit MRZ OCR"
         )
     }
 }
