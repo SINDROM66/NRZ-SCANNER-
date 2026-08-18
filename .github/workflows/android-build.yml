@@ -20,8 +20,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK & Licenses
+      - name: Setup Android SDK & Install Platforms 34
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0'
 
       - name: Prepare Web Assets in Android App
         run: |

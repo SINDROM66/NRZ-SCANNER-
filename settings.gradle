@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NSSF Member Data Capture"
+rootProject.name = "NSSF_Member_Data_Capture"
 include ':app'
