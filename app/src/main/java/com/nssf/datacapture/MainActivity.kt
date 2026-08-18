@@ -10,6 +10,7 @@ import android.view.View
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.material.tabs.TabLayout
 import com.google.mlkit.vision.common.InputImage
@@ -49,9 +50,9 @@ class MainActivity : AppCompatActivity() {
         tabLayout = findViewById(R.id.tabLayout)
         container = findViewById(R.id.container)
 
-        // Request Camera permission
+        // Request Camera permission safely using ActivityCompat
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(Manifest.permission.CAMERA), 101)
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 101)
         }
 
         setupNativeUi()
@@ -195,7 +196,8 @@ class MainActivity : AppCompatActivity() {
 
             recognizer.process(image)
                 .addOnSuccessListener { visionText ->
-                    val lines = visionText.textBlocks.flatMap { block -> block.lines.map { it.text } }
+                    // Direct text line extraction
+                    val lines = visionText.text.split("\n")
                     val parsedRecord = UgandaIdParser.parseMrzLines(lines)
 
                     if (parsedRecord != null) {
