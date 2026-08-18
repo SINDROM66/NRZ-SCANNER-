@@ -14,7 +14,7 @@ android {
         versionName "1.0"
     }
 
-    flavorDimensions = ["mode"]
+    flavorDimensions "mode"
     productFlavors {
         offline {
             dimension "mode"
