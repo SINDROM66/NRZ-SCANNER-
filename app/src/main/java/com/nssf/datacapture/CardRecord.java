@@ -1,5 +1,7 @@
 package com.nssf.datacapture;
 
+import com.nssf.datacapture.UgandaIdParser.ValidationConfidence;
+
 public class CardRecord {
     public String surname = "";
     public String givenName = "";
@@ -10,6 +12,11 @@ public class CardRecord {
     public String cardNumber = "";
     public String phoneNumber = "";
     public String source = "Native Google ML Kit MRZ OCR";
+
+    // MRZ validation metadata
+    public ValidationConfidence validationConfidence = ValidationConfidence.HIGH;
+    public int validationFailures = 0;
+    public String expiryDate = "";
 
     public CardRecord() {}
 

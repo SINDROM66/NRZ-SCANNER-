@@ -7,17 +7,33 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Uganda National ID MRZ Parser — ICAO 9303 TD1 Compliant
+ * 
+ * Confirmed field layout across 3 test cards (Samuel, Mellisa, Timothy):
+ * 
+ * Line 1 (30 chars): ID + UGA + {CARD_NUMBER:9} + {CD1:1} + {NIN:15, padded with <}
+ * Line 2 (30 chars): {DOB:6} + {CD2:1} + {SEX:1} + {EXPIRY:6} + {CD3:1} + UGA + {FILLER:11} + {CD_COMPOSITE:1}
+ * Line 3 (30 chars): {SURNAME}<<{GIVEN_NAME}<{OTHER_NAME}<<<<<<<<<<<<<<<<<<<<<<<<<<
+ */
 public class UgandaIdParser {
 
+    // NIN format validators
     private static final Pattern OLD_NIN_REGEX = Pattern.compile("^[A-Z]{2}[0-9]{9}[A-Z]{3}$", Pattern.CASE_INSENSITIVE);
     private static final Pattern NEW_NIN_REGEX = Pattern.compile("^[A-Z]{2}[0-9]{10}[A-Z]{2}$", Pattern.CASE_INSENSITIVE);
 
+    // MRZ line validators (exact 30-char TD1)
+    private static final Pattern LINE1_REGEX = Pattern.compile("^IDUGA(\\d{9})(\\d)([A-Z0-9<]{15})$");
+    private static final Pattern LINE2_REGEX = Pattern.compile("^(\\d{6})(\\d)([MF<])(\\d{6})(\\d)UGA([A-Z0-9<]{11})(\\d)$");
+
+    // OCR confusion correction maps
     private static final Map<Character, Character> DIGIT_TO_LETTER = new HashMap<>();
     private static final Map<Character, Character> LETTER_TO_DIGIT = new HashMap<>();
 
     static {
         DIGIT_TO_LETTER.put('0', 'O'); DIGIT_TO_LETTER.put('1', 'I'); DIGIT_TO_LETTER.put('5', 'S');
-        DIGIT_TO_LETTER.put('8', 'B'); DIGIT_TO_LETTER.put('6', 'G'); DIGIT_TO_LETTER.put('4', 'A'); DIGIT_TO_LETTER.put('2', 'Z');
+        DIGIT_TO_LETTER.put('8', 'B'); DIGIT_TO_LETTER.put('6', 'G'); DIGIT_TO_LETTER.put('4', 'A');
+        DIGIT_TO_LETTER.put('2', 'Z');
 
         LETTER_TO_DIGIT.put('O', '0'); LETTER_TO_DIGIT.put('I', '1'); LETTER_TO_DIGIT.put('S', '5');
         LETTER_TO_DIGIT.put('B', '8'); LETTER_TO_DIGIT.put('G', '6'); LETTER_TO_DIGIT.put('A', '4');
@@ -25,6 +41,82 @@ public class UgandaIdParser {
         LETTER_TO_DIGIT.put('Q', '0'); LETTER_TO_DIGIT.put('R', '8'); LETTER_TO_DIGIT.put('T', '7');
         LETTER_TO_DIGIT.put('Y', '7'); LETTER_TO_DIGIT.put('U', '0'); LETTER_TO_DIGIT.put('P', '9');
         LETTER_TO_DIGIT.put('H', '8'); LETTER_TO_DIGIT.put('L', '1');
+    }
+
+    /**
+     * ICAO 9303 Modulo-10 Check Digit Calculator
+     * Weights: 7, 3, 1 repeating
+     * Mapping: 0-9 → 0-9, A-Z → 10-35, < → 0
+     */
+    public static int calculateCheckDigit(String data) {
+        int[] weights = {7, 3, 1};
+        int sum = 0;
+        for (int i = 0; i < data.length(); i++) {
+            char c = data.charAt(i);
+            int value;
+            if (c == '<') {
+                value = 0;
+            } else if (c >= '0' && c <= '9') {
+                value = c - '0';
+            } else if (c >= 'A' && c <= 'Z') {
+                value = 10 + (c - 'A');
+            } else {
+                value = 0;
+            }
+            sum += value * weights[i % 3];
+        }
+        return (10 - (sum % 10)) % 10;
+    }
+
+    /**
+     * Validate all check digits with graceful degradation.
+     * @return ValidationResult containing confidence level and failure count
+     */
+    public static ValidationResult validateCheckDigits(String line1, String line2) {
+        if (line1 == null || line2 == null || line1.length() != 30 || line2.length() != 30) {
+            return new ValidationResult(0, ValidationConfidence.REJECT);
+        }
+
+        int failures = 0;
+
+        // CD1: Document number (card number) — line1 positions 6-14 (0-indexed: 5-14), 9 chars
+        String cardNumber = line1.substring(5, 14);
+        int expectedCd1 = calculateCheckDigit(cardNumber);
+        int actualCd1 = Character.getNumericValue(line1.charAt(14));
+        if (expectedCd1 != actualCd1) failures++;
+
+        // CD2: Date of birth — line2 positions 1-6 (0-indexed: 0-6), 6 chars
+        String dobRaw = line2.substring(0, 6);
+        int expectedCd2 = calculateCheckDigit(dobRaw);
+        int actualCd2 = Character.getNumericValue(line2.charAt(6));
+        if (expectedCd2 != actualCd2) failures++;
+
+        // CD3: Date of expiry — line2 positions 9-14 (0-indexed: 8-14), 6 chars
+        String expiryRaw = line2.substring(8, 14);
+        int expectedCd3 = calculateCheckDigit(expiryRaw);
+        int actualCd3 = Character.getNumericValue(line2.charAt(14));
+        if (expectedCd3 != actualCd3) failures++;
+
+        // CD_COMPOSITE: Over line1[5:30] + line2[0:29] (54 chars total)
+        String compositeData = line1.substring(5, 30) + line2.substring(0, 29);
+        int expectedCdComposite = calculateCheckDigit(compositeData);
+        int actualCdComposite = Character.getNumericValue(line2.charAt(29));
+        if (expectedCdComposite != actualCdComposite) failures++;
+
+        ValidationConfidence confidence;
+        switch (failures) {
+            case 0:
+                confidence = ValidationConfidence.HIGH;
+                break;
+            case 1:
+                confidence = ValidationConfidence.MEDIUM;
+                break;
+            default:
+                confidence = ValidationConfidence.REJECT;
+                break;
+        }
+
+        return new ValidationResult(failures, confidence);
     }
 
     public static String cleanMrzNameToken(String token) {
@@ -92,74 +184,104 @@ public class UgandaIdParser {
     public static CardRecord parseMrzLines(List<String> lines) {
         if (lines == null || lines.isEmpty()) return null;
 
+        // Step 1: Extract candidate MRZ lines (30-char alphanumeric with MRZ signatures)
         List<String> candidates = new ArrayList<>();
         for (String l : lines) {
             String clean = l.trim().replaceAll("\\s+", "").toUpperCase().replace('€', 'C');
-            if (clean.contains("UGA") || clean.contains("<") || clean.contains("CM0") || clean.contains("CF0") || clean.contains("IDUGA")) {
+            if (clean.length() >= 25 && (clean.contains("IDUGA") || clean.contains("UGA") || clean.contains("<<"))) {
                 candidates.add(clean);
             }
         }
 
         if (candidates.isEmpty()) return null;
 
+        // Step 2: Identify line 1, line 2, line 3 by signature
         String line1 = null, line2 = null, line3 = null;
         for (String l : candidates) {
-            if (l.contains("IDUGA") || (l.length() >= 25 && (l.contains("CM") || l.contains("CF") || l.startsWith("UGA")))) {
-                line1 = l;
-            } else if (l.matches(".*\\d{6}[MF\\d]\\d{6}UGA.*") || (l.length() >= 20 && l.contains("UGA"))) {
-                line2 = l;
-            } else if (l.contains("<<") || (l.length() >= 15 && l.contains("<"))) {
-                line3 = l;
+            if (l.startsWith("IDUGA") && l.length() >= 30 && l.matches(".*\\d{9}.*")) {
+                line1 = l.length() >= 30 ? l.substring(0, 30) : l;
+            } else if (l.matches("^\\d{6}.*UGA.*") && l.length() >= 30) {
+                line2 = l.substring(0, 30);
+            } else if (l.contains("<<") && l.length() >= 10) {
+                line3 = l.length() >= 30 ? l.substring(0, 30) : l;
             }
         }
 
-        if (line1 == null || line3 == null) {
-            if (candidates.size() >= 3) {
-                line1 = candidates.get(0); line2 = candidates.get(1); line3 = candidates.get(2);
-            } else if (candidates.size() >= 2) {
-                line1 = candidates.get(0); line3 = candidates.get(1);
-            } else {
-                return null;
+        // Fallback: assign by order if signatures fail
+        if (line1 == null || line2 == null || line3 == null) {
+            List<String> longLines = new ArrayList<>();
+            for (String c : candidates) {
+                if (c.length() >= 25) longLines.add(c);
+            }
+            if (longLines.size() >= 3) {
+                line1 = longLines.get(0).substring(0, Math.min(30, longLines.get(0).length()));
+                line2 = longLines.get(1).substring(0, Math.min(30, longLines.get(1).length()));
+                line3 = longLines.get(2).substring(0, Math.min(30, longLines.get(2).length()));
+            } else if (longLines.size() >= 2) {
+                line1 = longLines.get(0).substring(0, Math.min(30, longLines.get(0).length()));
+                if (line1.contains("IDUGA")) {
+                    line2 = longLines.get(1).substring(0, Math.min(30, longLines.get(1).length()));
+                } else {
+                    line3 = longLines.get(1).substring(0, Math.min(30, longLines.get(1).length()));
+                }
             }
         }
 
-        String cardNumber = "", nin = "";
-        Pattern m1Pattern = Pattern.compile("IDUGA(\\d{9})\\d([A-Z0-9<]{14,15})");
-        Matcher matcher1 = m1Pattern.matcher(line1);
-        if (matcher1.find()) {
-            cardNumber = matcher1.group(1);
-            nin = normalizeNinCandidate(matcher1.group(2).replace("<", ""));
+        if (line1 == null || line3 == null) return null;
+        if (line1.length() < 30) line1 = padTo30(line1);
+        if (line2 != null && line2.length() < 30) line2 = padTo30(line2);
+        if (line3.length() < 30) line3 = padTo30(line3);
+
+        // Step 3: Parse Line 1 — IDUGA + Card Number + CD1 + NIN field
+        String cardNumber = "";
+        String nin = "";
+        Matcher m1 = LINE1_REGEX.matcher(line1);
+        if (m1.find()) {
+            cardNumber = m1.group(1);
+            String ninField = m1.group(3).replace("<", "");
+            nin = normalizeNinCandidate(ninField);
         } else {
-            Matcher cardMatch = Pattern.compile("\\d{9,10}").matcher(line1);
-            if (cardMatch.find()) cardNumber = cardMatch.group(0);
-            Matcher ninMatch = Pattern.compile("[A-Z]{2}\\d{8,9}[A-Z0-9]{3,4}").matcher(line1);
+            // Fallback regex
+            Matcher cardMatch = Pattern.compile("IDUGA(\\d{9})").matcher(line1);
+            if (cardMatch.find()) cardNumber = cardMatch.group(1);
+            Matcher ninMatch = Pattern.compile("[A-Z]{2}\\d{8,10}[A-Z]{2,3}").matcher(line1);
             if (ninMatch.find()) nin = normalizeNinCandidate(ninMatch.group(0));
         }
 
-        String dob = "", sex = "Male";
+        // Step 4: Parse Line 2 — DOB + CD2 + Sex + Expiry + CD3 + UGA + Filler + CD_COMPOSITE
+        String dob = "";
+        String sex = "Male";
+        String expiryDate = "";
+        ValidationResult validation = new ValidationResult(4, ValidationConfidence.REJECT);
+
         if (line2 != null) {
-            Pattern m2Pattern = Pattern.compile("(\\d{6})\\d([MF<])(\\d{6})\\dUGA");
-            Matcher matcher2 = m2Pattern.matcher(line2);
-            if (matcher2.find()) {
-                String dobStr = matcher2.group(1);
-                if (dobStr.length() == 6) {
-                    try {
-                        int yy = Integer.parseInt(dobStr.substring(0, 2));
-                        int year = (yy <= 30) ? 2000 + yy : 1900 + yy;
-                        dob = year + "-" + dobStr.substring(2, 4) + "-" + dobStr.substring(4, 6);
-                    } catch (Exception ignored) {}
-                }
-                String sexChar = matcher2.group(2);
+            Matcher m2 = LINE2_REGEX.matcher(line2);
+            if (m2.find()) {
+                String dobStr = m2.group(1);
+                dob = formatDate(dobStr);
+
+                String sexChar = m2.group(3);
                 if ("F".equals(sexChar)) sex = "Female";
                 else if ("M".equals(sexChar)) sex = "Male";
+
+                String expiryStr = m2.group(4);
+                expiryDate = formatDate(expiryStr);
+
+                // Run check digit validation
+                validation = validateCheckDigits(line1, line2);
             }
         }
 
+        // Override sex based on NIN prefix (Ugandan NIN convention)
         if (nin.startsWith("CF") || nin.startsWith("AF") || nin.startsWith("PF")) {
             sex = "Female";
         }
 
-        String surname = "", givenName = "", otherName = "";
+        // Step 5: Parse Line 3 — Names separated by << and <
+        String surname = "";
+        String givenName = "";
+        String otherName = "";
+
         String clean3 = line3.replaceAll("<+$", "").replaceAll("\\s+", "");
         if (clean3.contains("<<")) {
             String[] parts = clean3.split("<<");
@@ -198,6 +320,57 @@ public class UgandaIdParser {
             }
         }
 
-        return new CardRecord(surname, givenName, otherName, sex, dob, nin, cardNumber, "", "Native Google ML Kit MRZ OCR");
+        CardRecord record = new CardRecord(
+                surname, givenName, otherName, sex, dob, nin, cardNumber,
+                "", "Native Google ML Kit MRZ OCR"
+        );
+        record.validationConfidence = validation.confidence;
+        record.validationFailures = validation.failureCount;
+        record.expiryDate = expiryDate;
+
+        return record;
+    }
+
+    /**
+     * Format YYMMDD to YYYY-MM-DD with century inference.
+     * Years 00-30 → 2000-2030; Years 31-99 → 1931-1999
+     */
+    private static String formatDate(String yymmdd) {
+        if (yymmdd == null || yymmdd.length() != 6 || !yymmdd.matches("\\d{6}")) {
+            return "";
+        }
+        try {
+            int yy = Integer.parseInt(yymmdd.substring(0, 2));
+            int year = (yy <= 30) ? 2000 + yy : 1900 + yy;
+            return year + "-" + yymmdd.substring(2, 4) + "-" + yymmdd.substring(4, 6);
+        } catch (NumberFormatException e) {
+            return "";
+        }
+    }
+
+    private static String padTo30(String s) {
+        if (s.length() >= 30) return s.substring(0, 30);
+        StringBuilder sb = new StringBuilder(s);
+        while (sb.length() < 30) sb.append('<');
+        return sb.toString();
+    }
+
+    /**
+     * Check digit validation result
+     */
+    public static class ValidationResult {
+        public final int failureCount;
+        public final ValidationConfidence confidence;
+
+        public ValidationResult(int failureCount, ValidationConfidence confidence) {
+            this.failureCount = failureCount;
+            this.confidence = confidence;
+        }
+    }
+
+    public enum ValidationConfidence {
+        HIGH,      // All 4 check digits pass
+        MEDIUM,    // 1 check digit fails — accept but flag
+        REJECT     // 2+ check digits fail
     }
 }

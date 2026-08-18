@@ -92,6 +92,11 @@
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="PHONE NUMBER *" android:textSize="12sp" android:layout_marginTop="12dp" />
             <EditText android:id="@+id/etPhone" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="phone" />
 
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="CARD NUMBER (AUTO FROM MRZ)" android:textSize="12sp" android:layout_marginTop="12dp" />
+            <EditText android:id="@+id/etCardNumber" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Card Number (auto from MRZ)" android:enabled="false" />
+
+            <TextView android:id="@+id/tvValidationStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="" android:textSize="14sp" android:textStyle="bold" android:paddingTop="8dp" android:paddingBottom="8dp" />
+
             <Button
                 android:id="@+id/btnSaveRecord"
                 android:layout_width="match_parent"
