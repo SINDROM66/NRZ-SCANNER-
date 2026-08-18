@@ -10,11 +10,15 @@ import android.view.View;
 import android.widget.*;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.material.tabs.TabLayout;
 import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
@@ -154,7 +158,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showRecordsMode() {
-        container.removeAllViews();
+        container.removeAllViews()  ;
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(32, 32, 32, 32);
@@ -194,23 +198,29 @@ public class MainActivity extends AppCompatActivity {
             TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
 
             recognizer.process(image)
-                .addOnSuccessListener(visionText -> {
-                    String text = visionText.getText();
-                    List<String> lines = Arrays.asList(text.split("\n"));
-                    CardRecord parsedRecord = UgandaIdParser.parseMrzLines(lines);
+                .addOnSuccessListener(new OnSuccessListener<Text>() {
+                    @Override
+                    public void onSuccess(Text visionText) {
+                        String text = visionText.getText();
+                        List<String> lines = Arrays.asList(text.split("\n"));
+                        CardRecord parsedRecord = UgandaIdParser.parseMrzLines(lines);
 
-                    if (parsedRecord != null) {
-                        tvScanStatus.setText("MRZ Decoded Successfully!");
-                        showFormMode(parsedRecord);
-                    } else {
-                        tvScanStatus.setText("Could not decode MRZ text. Please enter details manually.");
-                        showFormMode(null);
+                        if (parsedRecord != null) {
+                            tvScanStatus.setText("MRZ Decoded Successfully!");
+                            showFormMode(parsedRecord);
+                        } else {
+                            tvScanStatus.setText("Could not decode MRZ text. Please enter details manually.");
+                            showFormMode(null);
+                        }
                     }
                 })
-                .addOnFailureListener(e -> {
-                    Log.e("NSSF_MRZ", "MRZ OCR Failure", e);
-                    tvScanStatus.setText("MRZ OCR Error: " + e.getMessage() + ". Please enter details manually.");
-                    showFormMode(null);
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.e("NSSF_MRZ", "MRZ OCR Failure", e);
+                        tvScanStatus.setText("MRZ OCR Error: " + e.getMessage() + ". Please enter details manually.");
+                        showFormMode(null);
+                    }
                 });
 
         } catch (Exception e) {
