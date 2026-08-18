@@ -14,6 +14,20 @@ android {
         versionName "1.0"
     }
 
+    flavorDimensions = ["mode"]
+    productFlavors {
+        offline {
+            dimension "mode"
+            applicationIdSuffix ".offline"
+            versionNameSuffix "-offline"
+        }
+        online {
+            dimension "mode"
+            applicationIdSuffix ".online"
+            versionNameSuffix "-online"
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
@@ -21,8 +35,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     sourceSets {

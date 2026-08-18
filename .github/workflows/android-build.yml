@@ -1,4 +1,4 @@
-name: Build Standalone Android APK
+name: Build Standalone Android APKs (Online & Offline)
 
 on:
   push:
@@ -11,7 +11,7 @@ env:
 
 jobs:
   build-apk:
-    name: Compile Standalone Android APK (.apk)
+    name: Compile Android APKs (Online & Offline)
     runs-on: ubuntu-latest
 
     steps:
@@ -39,12 +39,17 @@ jobs:
         with:
           gradle-version: '8.4'
 
-      - name: Build Standalone Android APK with Gradle
+      - name: Build Both Online & Offline APKs with Gradle
         run: gradle assembleDebug --stacktrace
 
-      - name: Upload Native Android APK Artifact (.apk)
+      - name: Upload Offline Android APK Artifact (.apk)
         uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: NSSF-Member-Data-Capture-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: NSSF-Offline-Member-Data-Capture-APK
+          path: app/build/outputs/apk/offline/debug/*.apk
+
+      - name: Upload Online Android APK Artifact (.apk)
+        uses: actions/upload-artifact@v4
+        with:
+          name: NSSF-Online-Member-Data-Capture-APK
+          path: app/build/outputs/apk/online/debug/*.apk
