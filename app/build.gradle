@@ -38,4 +38,5 @@ dependencies {
 
     // Google ML Kit Text Recognition Engine (100% Offline MRZ Scanner)
     implementation 'com.google.mlkit:text-recognition:16.0.0'
+    implementation 'com.google.mlkit:text-recognition-latin:16.0.0'
 }
