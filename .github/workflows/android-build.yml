@@ -1,4 +1,4 @@
-name: Build Standalone Android APKs (Online & Offline)
+name: Build Pure Native Android APK (Google ML Kit Offline Scanner)
 
 on:
   push:
@@ -11,7 +11,7 @@ env:
 
 jobs:
   build-apk:
-    name: Compile Android APKs (Online & Offline)
+    name: Compile Pure Native Kotlin Android APK (.apk)
     runs-on: ubuntu-latest
 
     steps:
@@ -29,27 +29,17 @@ jobs:
         with:
           packages: 'platforms;android-34 build-tools;34.0.0'
 
-      - name: Prepare Web Assets in Android App
-        run: |
-          mkdir -p app/src/main/assets
-          cp -r index.html css js manifest.json sw.js app/src/main/assets/
-
       - name: Setup Gradle 8.4
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.4'
 
-      - name: Build Both Online & Offline APKs with Gradle
+      - name: Build Pure Native Debug APK with Gradle
         run: gradle assembleDebug --stacktrace
 
-      - name: Upload Offline Android APK Artifact (.apk)
+      - name: Upload Native Android APK Artifact (.apk)
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: NSSF-Offline-Member-Data-Capture-APK
-          path: app/build/outputs/apk/offline/debug/*.apk
-
-      - name: Upload Online Android APK Artifact (.apk)
-        uses: actions/upload-artifact@v4
-        with:
-          name: NSSF-Online-Member-Data-Capture-APK
-          path: app/build/outputs/apk/online/debug/*.apk
+          name: NSSF-Native-Offline-Scanner-APK
+          path: app/build/outputs/apk/debug/*.apk
