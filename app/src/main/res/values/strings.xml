@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">NSSF Capture</string>
+    <string name="app_name">NSSF Member Data Capture</string>
+    <string name="app_title">NSSF Digital Pre-Registration</string>
+    <string name="scan_mrz">Scan MRZ</string>
+    <string name="manual_form">Manual Form</string>
+    <string name="records">Records</string>
 </resources>

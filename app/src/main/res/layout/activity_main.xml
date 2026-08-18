@@ -11,7 +11,7 @@
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:background="#0D4F82"
-        app:title="NSSF Digital Pre-Registration"
+        app:title="@string/app_title"
         app:titleTextColor="#FFFFFF" />
 
     <com.google.android.material.tabs.TabLayout
