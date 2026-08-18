@@ -5,6 +5,10 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
 jobs:
   build-apk:
     name: Compile Standalone Android APK (.apk)
@@ -41,11 +45,11 @@ jobs:
           chmod +x gradlew
 
       - name: Build Debug APK with Gradle
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --stacktrace --info
 
       - name: Upload Native Android APK Artifact (.apk)
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: NSSF-Member-Data-Capture-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk
