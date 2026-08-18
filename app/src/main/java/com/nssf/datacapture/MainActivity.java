@@ -76,6 +76,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupNativeUi() {
+        tabLayout.removeAllTabs();
+        tabLayout.addTab(tabLayout.newTab().setText("Scan MRZ"));
+        tabLayout.addTab(tabLayout.newTab().setText("Manual Form"));
+        tabLayout.addTab(tabLayout.newTab().setText("Records"));
+
         tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
             @Override
             public void onTabSelected(TabLayout.Tab tab) {

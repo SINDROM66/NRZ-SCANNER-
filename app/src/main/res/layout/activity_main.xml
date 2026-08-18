@@ -26,23 +26,7 @@
         android:background="#0D4F82"
         app:tabIndicatorColor="#0A7044"
         app:tabSelectedTextColor="#FFFFFF"
-        app:tabTextColor="#A0C4E4">
-
-        <com.google.android.material.tabs.TabItem
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Scan MRZ" />
-
-        <com.google.android.material.tabs.TabItem
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Manual Form" />
-
-        <com.google.android.material.tabs.TabItem
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Records" />
-    </com.google.android.material.tabs.TabLayout>
+        app:tabTextColor="#A0C4E4" />
 
     <!-- Main Container View -->
     <FrameLayout
