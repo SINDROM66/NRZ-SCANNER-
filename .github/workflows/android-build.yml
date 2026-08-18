@@ -1,4 +1,4 @@
-name: Build Native Android APK (Offline Scanner)
+name: Build Standalone Android APK
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-apk:
-    name: Compile Standalone Android APK
+    name: Compile Standalone Android APK (.apk)
     runs-on: ubuntu-latest
 
     steps:
@@ -20,31 +20,23 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Cache Gradle Packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+      - name: Prepare Web Assets in Android App
+        run: |
+          mkdir -p app/src/main/assets
+          cp -r index.html css js manifest.json sw.js app/src/main/assets/
 
-      - name: Grant Execute Permission for Gradle Wrapper
-        run: chmod +x gradlew || true
+      - name: Setup Gradle Wrapper
+        run: |
+          gradle wrapper --gradle-version 8.4
+
+      - name: Make Gradle Wrapper Executable
+        run: chmod +x gradlew
 
       - name: Build Debug APK with Gradle
-        run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew assembleDebug --stacktrace
-          else
-            echo "Gradle wrapper not present in root directory. PWA Web App is deployed."
-          fi
+        run: ./gradlew assembleDebug --stacktrace
 
-      - name: Upload Native Android APK Artifact
+      - name: Upload Native Android APK Artifact (.apk)
         uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: NSSF-Member-Data-Capture-OfflineScanner-APK
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: ignore
+          name: NSSF-Member-Data-Capture-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
