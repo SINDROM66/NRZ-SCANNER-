@@ -256,16 +256,32 @@ function setupScannerAndModal() {
         scanView.classList.add('hidden');
         progressView.classList.remove('hidden');
         console.log("Card 2: Running OCR — Please Wait...");
-        console.log("Executing Python Engine Backend (/api/scan-id)...");
+        // Resolve API Endpoint URL (Local server or custom remote IP)
+        let apiEndpoint = localStorage.getItem('api_endpoint');
+        if (!apiEndpoint) {
+            apiEndpoint = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.'))
+                ? '/api/scan-id'
+                : 'http://10.90.90.83:8000/api/scan-id';
+        }
+
+        console.log(`Executing Python Engine Backend (${apiEndpoint})...`);
 
         const formData = new FormData();
         formData.append('file', selectedFile);
 
         try {
-            const response = await fetch('/api/scan-id', {
+            const response = await fetch(apiEndpoint, {
                 method: 'POST',
                 body: formData
             });
+
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                if (response.status === 404 || contentType.includes('text/html')) {
+                    throw new Error("Python Backend Server unreachable. Please ensure server.py is running on http://10.90.90.83:8000 or http://127.0.0.1:8000.");
+                }
+                throw new Error(`Server returned non-JSON response (${response.status})`);
+            }
 
             if (!response.ok) {
                 const errData = await response.json();
