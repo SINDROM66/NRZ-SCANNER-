@@ -1,6 +1,7 @@
 package com.nssf.datacapture;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -49,10 +50,13 @@ public class MainActivity extends AppCompatActivity {
 
     private final List<CardRecord> savedRecords = new ArrayList<>();
 
-    private final ActivityResultLauncher<String> selectPhotoLauncher =
-            registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
-                if (uri != null) {
-                    processImageUriForMrz(uri);
+    private final ActivityResultLauncher<Intent> photoPickerLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    Uri uri = result.getData().getData();
+                    if (uri != null) {
+                        processImageUriForMrz(uri);
+                    }
                 }
             });
 
@@ -107,7 +111,11 @@ public class MainActivity extends AppCompatActivity {
         btnScanPhoto.setText("Choose / Take Photo");
         btnScanPhoto.setBackgroundColor(0xFF0D4F82);
         btnScanPhoto.setTextColor(0xFFFFFFFF);
-        btnScanPhoto.setOnClickListener(v -> selectPhotoLauncher.launch("image/*"));
+        btnScanPhoto.setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("image/*");
+            photoPickerLauncher.launch(intent);
+        });
 
         layout.addView(tvScanStatus);
         layout.addView(btnScanPhoto);
@@ -158,7 +166,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showRecordsMode() {
-        container.removeAllViews()  ;
+        container.removeAllViews();
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(32, 32, 32, 32);
