@@ -281,46 +281,61 @@ function setupScannerAndModal() {
         scanView.classList.add('hidden');
         progressView.classList.remove('hidden');
         console.log("Card 2: Running OCR — Please Wait...");
-        // Resolve API Endpoint URL (Local server or custom remote IP)
-        let apiEndpoint = localStorage.getItem('api_endpoint');
-        if (!apiEndpoint) {
-            apiEndpoint = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.'))
-                ? '/api/scan-id'
-                : 'http://10.90.90.83:8000/api/scan-id';
+        
+        let record = null;
+        const isHttps = window.location.protocol === 'https:';
+
+        // 1. Attempt Backend Server Fetch (if HTTP or local origin)
+        if (!isHttps || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            let apiEndpoint = localStorage.getItem('api_endpoint') || '/api/scan-id';
+            try {
+                console.log(`Executing Python Engine Backend (${apiEndpoint})...`);
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+
+                const response = await fetch(apiEndpoint, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.includes('application/json')) {
+                        record = await response.json();
+                        console.log("Backend OCR Finished! Record:", record);
+                    }
+                }
+            } catch (err) {
+                console.warn("Backend fetch unreachable, attempting Client-Side Tesseract OCR fallback:", err.message);
+            }
         }
 
-        console.log(`Executing Python Engine Backend (${apiEndpoint})...`);
+        // 2. Client-Side Tesseract.js WebAssembly OCR Fallback (Works 100% Offline / HTTPS / GitHub Pages)
+        if (!record && typeof Tesseract !== 'undefined') {
+            try {
+                console.log("Running Client-Side Tesseract.js OCR in Browser...");
+                const result = await Tesseract.recognize(selectedFile, 'eng', {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            console.log(`OCR Progress: ${(m.progress * 100).toFixed(0)}%`);
+                        }
+                    }
+                });
 
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-
-        try {
-            const response = await fetch(apiEndpoint, {
-                method: 'POST',
-                body: formData
-            });
-
-            const contentType = response.headers.get('content-type') || '';
-            if (!contentType.includes('application/json')) {
-                if (response.status === 404 || contentType.includes('text/html')) {
-                    throw new Error("Python Backend Server unreachable. Please ensure server.py is running on http://10.90.90.83:8000 or http://127.0.0.1:8000.");
-                }
-                throw new Error(`Server returned non-JSON response (${response.status})`);
+                const rawText = result.data.text || '';
+                const lines = rawText.split('\n');
+                record = UgIdParser.parseMrzTextLines(lines) || UgIdParser.parseBarcodePayload(rawText);
+            } catch (tessErr) {
+                console.error("Client-Side Tesseract OCR failed:", tessErr.message);
             }
+        }
 
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.detail || 'Scan failed');
-            }
-
-            const record = await response.json();
-            console.log("OCR Finished! Record:", record);
-
+        if (record) {
             document.getElementById('surname').value = record.surname || '';
-            document.getElementById('givenName').value = record.given_name || '';
-            document.getElementById('otherName').value = record.other_name || '';
+            document.getElementById('givenName').value = record.given_name || record.givenName || '';
+            document.getElementById('otherName').value = record.other_name || record.otherName || '';
             document.getElementById('sex').value = record.sex || '';
-            document.getElementById('dob').value = record.date_of_birth || '';
+            document.getElementById('dob').value = record.date_of_birth || record.dateOfBirth || '';
             document.getElementById('nationality').value = 'UGA';
             document.getElementById('nin').value = record.nin || '';
             
@@ -335,11 +350,11 @@ function setupScannerAndModal() {
             scanBtn.classList.add('active');
             manualBtn.classList.remove('active');
 
-        } catch (err) {
-            console.error("Scanning Error:", err.message);
+        } else {
+            console.error("Scanning Error: Could not decode MRZ text or backend unreachable");
             progressView.classList.add('hidden');
             scanView.classList.remove('hidden');
-            scannerError.textContent = `Error: ${err.message}`;
+            scannerError.textContent = `Error: Could not decode MRZ text from photo. Please fill out details manually.`;
             scannerError.classList.remove('hidden');
         }
     });
