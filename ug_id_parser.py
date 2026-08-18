@@ -766,43 +766,70 @@ def _parse_mrz_lines(lines: list[str]) -> CardRecord | None:
 
 def parse_card_with_ml_ocr(source_path: str) -> CardRecord:
     extracted_texts = []
-    
-    # 1. EasyOCR (PyTorch ML OCR)
-    if EASYOCR_AVAILABLE:
-        img_for_ocr = source_path
-        if CV2_AVAILABLE:
+    cropped_mrz_path = source_path
+
+    # Fast ROI Crop: MRZ is located strictly in the bottom 45% of Ugandan ID card back
+    if CV2_AVAILABLE:
+        try:
             img_cv = cv2.imread(source_path)
             if img_cv is not None:
                 h, w = img_cv.shape[:2]
-                max_side = max(h, w)
-                if max_side > 1280:
-                    scale = 1280.0 / max_side
-                    resized = cv2.resize(img_cv, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-                    temp_ocr_path = str(Path(source_path).parent / f"temp_ocr_{Path(source_path).name}")
-                    cv2.imwrite(temp_ocr_path, resized)
-                    img_for_ocr = temp_ocr_path
-
-        try:
-            reader = _get_ocr_reader()
-            ocr_results = reader.readtext(img_for_ocr)
-            extracted_texts = [text for _, text, prob in ocr_results if prob > 0.2]
+                crop_mrz = img_cv[int(h * 0.52):, :]
+                max_side = max(crop_mrz.shape[:2])
+                if max_side > 1000:
+                    scale = 1000.0 / max_side
+                    crop_mrz = cv2.resize(crop_mrz, (int(crop_mrz.shape[1] * scale), int(crop_mrz.shape[0] * scale)), interpolation=cv2.INTER_AREA)
+                
+                temp_mrz = str(Path(source_path).parent / f"temp_mrz_fast_{Path(source_path).name}")
+                cv2.imwrite(temp_mrz, crop_mrz)
+                cropped_mrz_path = temp_mrz
         except Exception:
             pass
 
-        if img_for_ocr != source_path and Path(img_for_ocr).exists():
-            try:
-                os.remove(img_for_ocr)
-            except OSError:
-                pass
-
-    # 2. PyTesseract Fallback (100% Offline Engine)
-    if not extracted_texts and PYTESSERACT_AVAILABLE and CV2_AVAILABLE:
+    # 1. PyTesseract Fast Engine (< 0.2 seconds)
+    if PYTESSERACT_AVAILABLE and CV2_AVAILABLE:
         try:
-            img_cv = cv2.imread(source_path)
+            img_cv = cv2.imread(cropped_mrz_path)
             if img_cv is not None:
                 gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-                tess_text = pytesseract.image_to_string(gray)
-                extracted_texts = [line.strip() for line in tess_text.splitlines() if line.strip()]
+                tess_text = pytesseract.image_to_string(gray, config='--psm 6')
+                lines = [line.strip() for line in tess_text.splitlines() if line.strip()]
+                parsed = _parse_mrz_lines(lines)
+                if parsed and (parsed.nin or parsed.surname or parsed.card_number):
+                    if cropped_mrz_path != source_path and Path(cropped_mrz_path).exists():
+                        try: os.remove(cropped_mrz_path)
+                        except OSError: pass
+                    parsed.source = source_path
+                    return parsed
+        except Exception:
+            pass
+
+    # 2. EasyOCR ROI Engine (< 1.5 seconds)
+    if EASYOCR_AVAILABLE:
+        try:
+            reader = _get_ocr_reader()
+            ocr_results = reader.readtext(cropped_mrz_path)
+            extracted_texts = [text for _, text, prob in ocr_results if prob > 0.2]
+            parsed = _parse_mrz_lines(extracted_texts)
+            if parsed and (parsed.nin or parsed.surname or parsed.card_number):
+                if cropped_mrz_path != source_path and Path(cropped_mrz_path).exists():
+                    try: os.remove(cropped_mrz_path)
+                    except OSError: pass
+                parsed.source = source_path
+                return parsed
+        except Exception:
+            pass
+
+    if cropped_mrz_path != source_path and Path(cropped_mrz_path).exists():
+        try: os.remove(cropped_mrz_path)
+        except OSError: pass
+
+    # Full frame EasyOCR fallback if ROI missed
+    if EASYOCR_AVAILABLE:
+        try:
+            reader = _get_ocr_reader()
+            ocr_results = reader.readtext(source_path)
+            extracted_texts = [text for _, text, prob in ocr_results if prob > 0.2]
         except Exception:
             pass
 
@@ -859,20 +886,24 @@ def parse_card_with_ml_ocr(source_path: str) -> CardRecord:
 def parse_card_image(
     source=None, *, strict: bool = False, debug: bool = False
 ) -> CardRecord:
+    img_path = str(resolve_image_path(source))
+    # Priority Fast Path: Try direct fast ML OCR MRZ scan (< 1.5 seconds)
+    try:
+        record = parse_card_with_ml_ocr(img_path)
+        if record and (record.nin or record.surname or record.card_number):
+            return record
+    except Exception:
+        pass
+
+    # Fallback to PDF417 Barcode scan
     try:
         payload, label = scan_card_image(source, debug=debug)
         if BIOMETRIC_TAG in payload or ";" in payload:
-            try:
-                return parse_card(payload, strict=strict, source=label)
-            except CardParseError:
-                pass
-        record = parse_card_with_ml_ocr(str(resolve_image_path(source)))
-        record.raw = payload
-        return record
-    except Exception as exc:
-        if debug:
-            print(f"Barcode scan note: {exc}. Using Machine Learning OCR fallback...", file=sys.stderr)
-        return parse_card_with_ml_ocr(str(resolve_image_path(source)))
+            return parse_card(payload, strict=strict, source=label)
+    except Exception:
+        pass
+
+    return parse_card_with_ml_ocr(img_path)
 
 def read_card(source, *, strict: bool = False, debug: bool = False) -> CardRecord:
     if isinstance(source, (str, os.PathLike)):
