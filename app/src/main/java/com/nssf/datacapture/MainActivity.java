@@ -55,6 +55,8 @@ public class MainActivity extends AppCompatActivity {
     private EditText etDob;
     private EditText etNin;
     private EditText etPhone;
+    private EditText etCardNumber;
+    private TextView tvValidationStatus;
     private Button btnSaveRecord;
 
     // Records Mode UI
@@ -120,6 +122,8 @@ public class MainActivity extends AppCompatActivity {
         etDob = findViewById(R.id.etDob);
         etNin = findViewById(R.id.etNin);
         etPhone = findViewById(R.id.etPhone);
+        etCardNumber = findViewById(R.id.etCardNumber);
+        tvValidationStatus = findViewById(R.id.tvValidationStatus);
         btnSaveRecord = findViewById(R.id.btnSaveRecord);
 
         tvRecordsCount = findViewById(R.id.tvRecordsCount);
@@ -180,6 +184,12 @@ public class MainActivity extends AppCompatActivity {
         etSex.setText(record.sex);
         etDob.setText(record.dateOfBirth);
         etNin.setText(record.nin);
+        if (etCardNumber != null) etCardNumber.setText(record.cardNumber);
+        if (tvValidationStatus != null) {
+            String badge = record.validationConfidence == UgandaIdParser.ValidationConfidence.HIGH ? "🟢 VALID (HIGH)" :
+                           record.validationConfidence == UgandaIdParser.ValidationConfidence.MEDIUM ? "🟠 REVIEW (MEDIUM)" : "🔴 REJECTED";
+            tvValidationStatus.setText("Validation: " + badge + " | Failures: " + record.validationFailures);
+        }
         showSection(sectionForm);
         TabLayout.Tab tab = tabLayout.getTabAt(1);
         if (tab != null) tab.select();

@@ -32,11 +32,11 @@ jobs:
           add-job-summary: 'always'
 
       - name: Build Pure Native Debug APK with Gradle
-        run: gradle :app:assembleDebug --console=plain --stacktrace --full-stacktrace
+        run: gradle assembleDebug --console=plain --stacktrace --full-stacktrace
 
       - name: Upload Native Android APK Artifact (.apk)
         uses: actions/upload-artifact@v4
-        if: success()
+        if: always()
         with:
           name: NSSF-Native-Offline-Scanner-APK
           path: app/build/outputs/apk/debug/*.apk
