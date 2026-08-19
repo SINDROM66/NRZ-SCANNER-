@@ -51,23 +51,17 @@ const UgIdParser = (function() {
             v = v.substring(0, 2) + v.substring(3);
         }
 
-        const embedded = v.match(/[CAP1G0OI4L][MFN13PR0-9BH][A-Z0-9]{12}/i);
-        if (embedded && embedded[0] !== v) {
-            return normalizeNinCandidate(embedded[0]);
+        const embedded = v.match(/(?:CM|CF|AF|PF)[A-Z0-9]{12}/i) || v.match(/[CAP1G0OI4L][MFN13PR0-9BH][A-Z0-9]{12}/i);
+        if (embedded) {
+            v = embedded[0];
         }
 
-        if (v.length !== 14) {
-            const match = v.match(/([CAP1G0OI4L][MFN13PR0-9BH])([A-Z0-9]{12})/i);
-            if (match) {
-                v = match[0];
-            } else {
-                return "";
-            }
-        }
+        if (v.length < 14) return "";
+        if (v.length > 14) v = v.substring(0, 14);
 
         let chars = v.split('');
 
-        // Prefix repair (CM / CF)
+        // Prefix repair (CM / CF / AF / PF)
         for (let i = 0; i < 2; i++) {
             if (DIGIT_TO_LETTER[chars[i]]) chars[i] = DIGIT_TO_LETTER[chars[i]];
         }
@@ -76,20 +70,24 @@ const UgIdParser = (function() {
 
         if (['N', 'H', 'K', 'R', 'P'].includes(chars[1])) chars[1] = 'M';
 
-        if (v.length >= 14 && /[A-Z]/i.test(v[11]) && !['O', 'I', 'S', 'B', 'G', 'A', 'Z'].includes(v[11])) {
-            let oldCand = tryNormalizeOldFormat(chars);
-            if (OLD_NIN_REGEX.test(oldCand)) return oldCand;
-        }
-
         let newCand = tryNormalizeNewFormat(chars);
         if (NEW_NIN_REGEX.test(newCand)) return newCand;
 
         let oldCand = tryNormalizeOldFormat(chars);
         if (OLD_NIN_REGEX.test(oldCand)) return oldCand;
-        if (NIN_REGEX.test(newCand)) return newCand;
-        if (NIN_REGEX.test(oldCand)) return oldCand;
 
-        return newCand.length === 14 ? newCand : oldCand;
+        // General Positional Repair
+        let charsFuzzy = [...chars];
+        for (let i = 2; i < 11; i++) {
+            if (LETTER_TO_DIGIT[charsFuzzy[i]]) charsFuzzy[i] = LETTER_TO_DIGIT[charsFuzzy[i]];
+        }
+        for (let i = 11; i < 14; i++) {
+            if (DIGIT_TO_LETTER[charsFuzzy[i]]) charsFuzzy[i] = DIGIT_TO_LETTER[charsFuzzy[i]];
+        }
+        let fuzzyCand = charsFuzzy.join('');
+        if (OLD_NIN_REGEX.test(fuzzyCand) || NEW_NIN_REGEX.test(fuzzyCand)) return fuzzyCand;
+
+        return newCand.length === 14 ? newCand : (oldCand.length === 14 ? oldCand : fuzzyCand);
     }
 
     function decodeBase64Utf8(str) {
@@ -165,22 +163,22 @@ const UgIdParser = (function() {
             }
         }
 
-        // Line 1: Card Number & NIN
+        // Line 1: Card Number & NIN Extraction (Excludes IDUGA matching error)
         let cardNumber = "", nin = "";
-        const m1Exact = line1.match(/IDUGA(?<card_no>\d{9})\d(?<nin>[A-Z0-9<]{14,15})/);
-        if (m1Exact && m1Exact.groups) {
-            cardNumber = m1Exact.groups.card_no;
-            nin = normalizeNinCandidate(m1Exact.groups.nin.replace(/</g, ''));
+        let cleanLine1 = line1.replace(/^IDUGA/i, '');
+        const cardMatch = cleanLine1.match(/^\d{9}/);
+        if (cardMatch) {
+            cardNumber = cardMatch[0];
+            let ninField = cleanLine1.substring(10).replace(/</g, '');
+            nin = normalizeNinCandidate(ninField);
         } else {
-            const m1Fallback = line1.match(/IDUGA(?<card_no>\d{10})(?<nin>[A-Z0-9<]{14,15})/);
-            if (m1Fallback && m1Fallback.groups) {
-                cardNumber = m1Fallback.groups.card_no;
-                nin = normalizeNinCandidate(m1Fallback.groups.nin.replace(/</g, ''));
-            } else {
-                const cardMatch = line1.match(/\d{9,10}/);
-                cardNumber = cardMatch ? cardMatch[0] : "";
-                const ninMatch = line1.match(/[A-Z]{2}\d{8,9}[A-Z0-9]{3,4}/);
-                nin = ninMatch ? normalizeNinCandidate(ninMatch[0]) : "";
+            const ninMatch = line1.match(/(?:CM|CF|AF|PF)[A-Z0-9]{12}/i) || line1.match(/[CAP1G0OI4L][MFN13PR0-9BH][A-Z0-9]{12}/i);
+            if (ninMatch) {
+                nin = normalizeNinCandidate(ninMatch[0]);
+            }
+            const cardNumMatch = line1.match(/\d{9}/);
+            if (cardNumMatch) {
+                cardNumber = cardNumMatch[0];
             }
         }
 
