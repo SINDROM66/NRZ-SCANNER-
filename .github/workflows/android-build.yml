@@ -30,14 +30,7 @@ jobs:
           add-job-summary: 'always'
 
       - name: Build Pure Native Debug APK with Gradle
-        run: |
-          gradle :app:assembleDebug --no-daemon --stacktrace --info || {
-            echo "====================== BUILD FAILED: PRINTING DETAILED LOGS ======================"
-            if [ -d "app/build/reports" ]; then
-              find app/build/reports -type f -exec echo "--- FILE: {} ---" \; -exec cat {} \;
-            fi
-            exit 1
-          }
+        run: gradle :app:assembleDebug --console=plain --stacktrace --full-stacktrace
 
       - name: Upload Native Android APK Artifact (.apk)
         uses: actions/upload-artifact@v4
