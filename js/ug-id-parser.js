@@ -70,11 +70,11 @@ const UgIdParser = (function() {
 
         if (['N', 'H', 'K', 'R', 'P'].includes(chars[1])) chars[1] = 'M';
 
-        let newCand = tryNormalizeNewFormat(chars);
-        if (NEW_NIN_REGEX.test(newCand)) return newCand;
-
         let oldCand = tryNormalizeOldFormat(chars);
         if (OLD_NIN_REGEX.test(oldCand)) return oldCand;
+
+        let newCand = tryNormalizeNewFormat(chars);
+        if (NEW_NIN_REGEX.test(newCand)) return newCand;
 
         // General Positional Repair
         let charsFuzzy = [...chars];
