@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -30,11 +30,27 @@ jobs:
           add-job-summary: 'always'
 
       - name: Build Pure Native Debug APK with Gradle
-        run: gradle :app:assembleDebug --no-daemon --stacktrace
+        run: |
+          gradle :app:assembleDebug --no-daemon --stacktrace --info || {
+            echo "====================== BUILD FAILED: PRINTING DETAILED LOGS ======================"
+            if [ -d "app/build/reports" ]; then
+              find app/build/reports -type f -exec echo "--- FILE: {} ---" \; -exec cat {} \;
+            fi
+            exit 1
+          }
 
       - name: Upload Native Android APK Artifact (.apk)
         uses: actions/upload-artifact@v4
-        if: always()
+        if: success()
         with:
           name: NSSF-Native-Offline-Scanner-APK
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Upload Build Failure Logs (If Failed)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: Gradle-Build-Failure-Logs
+          path: |
+            app/build/reports/
+            app/build/outputs/logs/
