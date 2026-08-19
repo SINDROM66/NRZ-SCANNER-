@@ -26,13 +26,8 @@ jobs:
           gradle-version: '8.4'
           add-job-summary: 'always'
 
-      - name: Generate Executable Gradle Wrapper Jar
-        run: |
-          gradle wrapper --gradle-version 8.4
-          chmod +x gradlew
-
-      - name: Build Pure Native Debug APK with Gradlew
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Build Pure Native Debug APK with Gradle
+        run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload Native Android APK Artifact (.apk)
         uses: actions/upload-artifact@v4
