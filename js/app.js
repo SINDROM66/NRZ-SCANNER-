@@ -390,6 +390,8 @@ function setupScannerAndModal() {
         if (!badge) {
             badge = document.createElement('div');
             badge.id = 'validation-badge';
+            badge.setAttribute('aria-live', 'polite');
+            badge.setAttribute('role', 'status');
             badge.style.cssText = 'padding: 8px 12px; margin-bottom: 12px; border-radius: 6px; font-weight: bold; font-size: 13px; text-align: center;';
             const formView = document.getElementById('card-form');
             if (formView) formView.insertBefore(badge, formView.firstChild);
@@ -478,11 +480,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const records = JSON.parse(localStorage.getItem('nssf_records') || '[]');
             if(records.length === 0) return;
             
-            const headers = ['SURNAME', 'GIVEN NAME', 'OTHER NAME', 'SEX', 'DOB', 'NATIONALITY', 'NIN', 'PHONE', 'TIMESTAMP'];
+            const headers = ['SCHEMA_VERSION', 'SURNAME', 'GIVEN NAME', 'OTHER NAME', 'SEX', 'DOB', 'NATIONALITY', 'NIN', 'PHONE', 'VALIDATION_STATUS', 'TIMESTAMP'];
             const csvRows = [headers.join(',')];
             
             records.forEach(r => {
                 const row = [
+                    `"2.0.0"`,
                     `"${r.surname || ''}"`,
                     `"${r.givenName || ''}"`,
                     `"${r.otherName || ''}"`,
@@ -491,6 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     `"${r.nationality || ''}"`,
                     `"${r.nin || ''}"`,
                     `"${r.phone || ''}"`,
+                    `"${r.validationConfidence || 'HIGH'}"`,
                     `"${r.timestamp || ''}"`
                 ];
                 csvRows.push(row.join(','));
@@ -503,7 +507,7 @@ document.addEventListener('DOMContentLoaded', () => {
             a.download = `NSSF_Records_${new Date().toISOString().split('T')[0]}.csv`;
             a.click();
             URL.revokeObjectURL(csvUrl);
-            console.log("Downloaded CSV export.");
+            console.log("Downloaded CSV export (Schema Version 2.0.0).");
         });
     }
 

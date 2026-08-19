@@ -3,14 +3,17 @@
  * Multi-layer cache-busting and 100% offline asset caching
  */
 
-const CACHE_NAME = 'nssf-mrz-v8';
+const CACHE_NAME = 'nssf-mrz-v9';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './manifest.json',
-    './js/ug-id-parser.js?v=20260819_v8',
-    './js/app.js?v=20260819_v8',
-    'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'
+    './js/uganda-id-parser.js?v=20260819_v9',
+    './js/mrz-preprocessor.js?v=20260819_v9',
+    './js/ug-id-parser.js?v=20260819_v9',
+    './js/app.js?v=20260819_v9',
+    'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
+    'https://docs.opencv.org/4.8.0/opencv.js'
 ];
 
 // Install Event - Force immediate activation
