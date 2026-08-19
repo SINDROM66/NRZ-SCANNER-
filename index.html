@@ -3,9 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>NSSF Member Data Capture</title>
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="css/styles.css?v=20260806_v4">
+    <link rel="stylesheet" href="css/styles.css?v=20260819_v8">
+    <script>
+        const APP_VERSION = '2026.08.19.v8';
+        if (localStorage.getItem('app_version') !== APP_VERSION) {
+            localStorage.setItem('app_version', APP_VERSION);
+            if (!sessionStorage.getItem('reloaded')) {
+                sessionStorage.setItem('reloaded', 'true');
+                location.reload(true);
+            }
+        }
+    </script>
 </head>
 <body>
     <!-- Security Lock Screen (Kept simple) -->
@@ -218,8 +229,20 @@
 
     <!-- Tesseract.js & App Logic Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="js/ug-id-parser.js?v=20260819_v6"></script>
-    <script src="js/app.js?v=20260819_v6"></script>
+    <script src="js/ug-id-parser.js?v=20260819_v8"></script>
+    <script src="js/app.js?v=20260819_v8"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    console.log('ServiceWorker registered:', reg.scope);
+                    setInterval(() => { reg.update(); }, 300000);
+                }).catch(err => {
+                    console.warn('ServiceWorker registration failed:', err);
+                });
+            });
+        }
+    </script>
 
     <!-- Dev Console Override Script -->
     <script>

@@ -863,13 +863,34 @@ def parse_card_with_ml_ocr(source_path: str) -> CardRecord:
             nin="", sex="Unknown", card_number=""
         )
 
-    # Sanitize and extract administrative fields (with strict P0 MRZ rejection guard)
-    for i, t in enumerate(extracted_texts):
+    # Sanitize and extract administrative fields (with dynamic MRZ bounding box exclusion)
+    admin_texts = []
+    mrz_y_boundaries = []
+    
+    if EASYOCR_AVAILABLE and 'ocr_results' in locals() and ocr_results:
+        for bbox, text, prob in ocr_results:
+            if is_mrz_or_garbage(text):
+                ys = [pt[1] for pt in bbox]
+                mrz_y_boundaries.extend(ys)
+        
+        if mrz_y_boundaries:
+            dynamic_mrz_y_min = min(mrz_y_boundaries) - 20
+            dynamic_mrz_y_max = max(mrz_y_boundaries) + 20
+            for bbox, text, prob in ocr_results:
+                cy = sum([pt[1] for pt in bbox]) / len(bbox)
+                if not (dynamic_mrz_y_min <= cy <= dynamic_mrz_y_max):
+                    admin_texts.append(text)
+        else:
+            admin_texts = extracted_texts
+    else:
+        admin_texts = extracted_texts
+
+    for i, t in enumerate(admin_texts):
         upper_t = t.upper()
         if "DISTRICT" in upper_t:
             val = clean_admin_token(upper_t.replace("DISTRICT", ""))
-            if not val and i+1 < len(extracted_texts):
-                val = clean_admin_token(extracted_texts[i+1].upper())
+            if not val and i+1 < len(admin_texts):
+                val = clean_admin_token(admin_texts[i+1].upper())
             if val: record.district = val
         elif "COUNTY" in upper_t and "SUBCOUNTY" not in upper_t:
             val = clean_admin_token(upper_t.replace("COUNTY", ""))
