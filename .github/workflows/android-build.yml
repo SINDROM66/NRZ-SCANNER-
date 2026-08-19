@@ -30,9 +30,7 @@ jobs:
           add-job-summary: 'always'
 
       - name: Build Pure Native Debug APK with Gradle
-        run: |
-          export JAVA_HOME=$JAVA_HOME_17_X64
-          gradle assembleDebug --no-daemon --info --stacktrace
+        run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload Native Android APK Artifact (.apk)
         uses: actions/upload-artifact@v4
