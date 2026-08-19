@@ -348,7 +348,11 @@ function setupScannerAndModal() {
 
                 const rawText = result.data.text || '';
                 const lines = rawText.split('\n');
-                record = UgIdParser.parseMrzTextLines(lines) || UgIdParser.parseBarcodePayload(rawText);
+                if (typeof UgandaIdParser !== 'undefined' && UgandaIdParser.parseMrzLines) {
+                    record = UgandaIdParser.parseMrzLines(lines) || UgIdParser.parseBarcodePayload(rawText);
+                } else {
+                    record = UgIdParser.parseMrzTextLines(lines) || UgIdParser.parseBarcodePayload(rawText);
+                }
             } catch (tessErr) {
                 console.error("Client-Side Tesseract OCR failed:", tessErr.message);
             }
@@ -366,22 +370,49 @@ function setupScannerAndModal() {
             // Leave phone NUMBER empty so the user MUST fill it out manually before saving!
             document.getElementById('phone').value = '';
 
+            updateValidationBadge(record);
+
             progressView.classList.add('hidden');
             formView.classList.remove('hidden');
 
-            const scanBtn = document.getElementById('nav-scan-btn');
-            const manualBtn = document.getElementById('nav-manual-btn');
-            scanBtn.classList.add('active');
-            manualBtn.classList.remove('active');
-
+            console.log("Card 2: Scanning Completed Successfully!");
         } else {
-            console.error("Scanning Error: Could not decode MRZ text or backend unreachable");
+            console.error("Scanning Error: Could not decode MRZ lines");
             progressView.classList.add('hidden');
             scanView.classList.remove('hidden');
-            scannerError.textContent = `Error: Could not decode MRZ text from photo. Please fill out details manually.`;
+            scannerError.textContent = 'Scanning Error: Could not decode MRZ lines from card photo.';
             scannerError.classList.remove('hidden');
         }
     });
+
+    function updateValidationBadge(record) {
+        let badge = document.getElementById('validation-badge');
+        if (!badge) {
+            badge = document.createElement('div');
+            badge.id = 'validation-badge';
+            badge.style.cssText = 'padding: 8px 12px; margin-bottom: 12px; border-radius: 6px; font-weight: bold; font-size: 13px; text-align: center;';
+            const formView = document.getElementById('card-form');
+            if (formView) formView.insertBefore(badge, formView.firstChild);
+        }
+
+        const confidence = record.validationConfidence || 'HIGH';
+        if (confidence === 'HIGH') {
+            badge.textContent = '✅ ICAO 9303 Checkdigits Validated (HIGH)';
+            badge.style.background = '#e8f5e9';
+            badge.style.color = '#2e7d32';
+            badge.style.border = '1px solid #a5d6a7';
+        } else if (confidence === 'MEDIUM') {
+            badge.textContent = '⚠️ 1 Checkdigit Warning — Please Review Fields (MEDIUM)';
+            badge.style.background = '#fff3e0';
+            badge.style.color = '#e65100';
+            badge.style.border = '1px solid #ffcc80';
+        } else {
+            badge.textContent = '❌ MRZ Checksum Failed — Verify Details Manually (REJECT)';
+            badge.style.background = '#ffebee';
+            badge.style.color = '#c62828';
+            badge.style.border = '1px solid #ef9a9a';
+        }
+    }
 }
 
 function updateRecordsBadge() {
