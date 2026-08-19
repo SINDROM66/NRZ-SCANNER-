@@ -9,6 +9,14 @@ setupForm();
 setupScannerAndModal();
 setupPWAInstall();
 
+// Initialize OpenCV.js Preprocessor
+if (typeof MrzPreprocessor !== 'undefined') {
+    MrzPreprocessor.init(
+        () => console.log('✅ OpenCV.js MRZ Preprocessor WASM Engine Ready'),
+        (err) => console.warn('⚠️ OpenCV.js WASM Preprocessor initialization warning:', err)
+    );
+}
+
 // 2. Register Service Worker
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
@@ -314,12 +322,28 @@ function setupScannerAndModal() {
         if (!record && typeof Tesseract !== 'undefined') {
             try {
                 console.log("Running Client-Side Tesseract.js OCR in Browser...");
-                const result = await Tesseract.recognize(selectedFile, 'eng', {
+                let ocrTarget = selectedFile;
+
+                if (typeof MrzPreprocessor !== 'undefined' && MrzPreprocessor.isReady()) {
+                    console.log("Applying OpenCV.js WASM Preprocessing (CLAHE + Adaptive Thresholding)...");
+                    const img = await new Promise((resolve, reject) => {
+                        const i = new Image();
+                        i.onload = () => resolve(i);
+                        i.onerror = reject;
+                        i.src = URL.createObjectURL(selectedFile);
+                    });
+                    const isLowEnd = navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4;
+                    ocrTarget = isLowEnd ? MrzPreprocessor.processFast(img) : MrzPreprocessor.process(img);
+                }
+
+                const result = await Tesseract.recognize(ocrTarget, 'eng', {
                     logger: m => {
                         if (m.status === 'recognizing text') {
                             console.log(`OCR Progress: ${(m.progress * 100).toFixed(0)}%`);
                         }
-                    }
+                    },
+                    psm: 6,
+                    oem: 3
                 });
 
                 const rawText = result.data.text || '';
