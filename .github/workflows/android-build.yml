@@ -20,8 +20,8 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Android SDK Path
-        run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Setup Gradle 8.4
         uses: gradle/actions/setup-gradle@v4
