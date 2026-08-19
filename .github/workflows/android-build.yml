@@ -31,8 +31,14 @@ jobs:
           gradle-version: '8.4'
           add-job-summary: 'always'
 
-      - name: Build Pure Native Debug APK with Gradle
-        run: gradle assembleDebug --console=plain --stacktrace --full-stacktrace
+      - name: Create local.properties & Generate Wrapper
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          gradle wrapper --gradle-version 8.4
+          chmod +x gradlew
+
+      - name: Build Pure Native Debug APK with Gradlew
+        run: ./gradlew assembleDebug --console=plain --stacktrace --full-stacktrace
 
       - name: Upload Native Android APK Artifact (.apk)
         uses: actions/upload-artifact@v4
