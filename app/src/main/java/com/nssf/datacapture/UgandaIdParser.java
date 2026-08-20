@@ -24,7 +24,7 @@ public class UgandaIdParser {
 
     // MRZ line validators (exact 30-char TD1)
     private static final Pattern LINE1_REGEX = Pattern.compile("^IDUGA(\\d{9})(\\d)([A-Z0-9<]{15})$");
-    private static final Pattern LINE2_REGEX = Pattern.compile("^(\\d{6})(\\d)([MF<])(\\d{6})(\\d)UGA([A-Z0-9<]{11})(\\d)$");
+    private static final Pattern LINE2_REGEX = Pattern.compile("^(\\d{6})(\\d)([MF<])(\\d{6})(\\d)UGA([A-Z0-9<]{11})([\\d<])$");
 
     // OCR confusion correction maps
     private static final Map<Character, Character> DIGIT_TO_LETTER = new HashMap<>();
@@ -104,16 +104,10 @@ public class UgandaIdParser {
         if (expectedCdComposite != actualCdComposite) failures++;
 
         ValidationConfidence confidence;
-        switch (failures) {
-            case 0:
-                confidence = ValidationConfidence.HIGH;
-                break;
-            case 1:
-                confidence = ValidationConfidence.MEDIUM;
-                break;
-            default:
-                confidence = ValidationConfidence.REJECT;
-                break;
+        if (failures <= 1) {
+            confidence = ValidationConfidence.HIGH;
+        } else {
+            confidence = ValidationConfidence.MEDIUM;
         }
 
         return new ValidationResult(failures, confidence);
@@ -172,11 +166,17 @@ public class UgandaIdParser {
             chars[0] = 'C';
         }
 
-        String newCand = tryNormalizeNewFormat(chars);
-        if (NEW_NIN_REGEX.matcher(newCand).matches()) return newCand;
+        // Prioritize Old Gen NIN layout if position 11 is a non-numeric letter (e.g. U, X, Y, V)
+        if (v.length() >= 14 && Character.isLetter(v.charAt(11)) && v.charAt(11) != 'O' && v.charAt(11) != 'I' && v.charAt(11) != 'S' && v.charAt(11) != 'B' && v.charAt(11) != 'G' && v.charAt(11) != 'A' && v.charAt(11) != 'Z') {
+            String oldCand = tryNormalizeOldFormat(chars);
+            if (OLD_NIN_REGEX.matcher(oldCand).matches()) return oldCand;
+        }
 
         String oldCand = tryNormalizeOldFormat(chars);
         if (OLD_NIN_REGEX.matcher(oldCand).matches()) return oldCand;
+
+        String newCand = tryNormalizeNewFormat(chars);
+        if (NEW_NIN_REGEX.matcher(newCand).matches()) return newCand;
 
         return newCand.length() == 14 ? newCand : oldCand;
     }
@@ -315,14 +315,14 @@ public class UgandaIdParser {
             Matcher m2 = LINE2_REGEX.matcher(line2);
             if (m2.find()) {
                 String dobStr = m2.group(1);
-                dob = formatDate(dobStr);
+                dob = formatDate(dobStr, false);
 
                 String sexChar = m2.group(3);
                 if ("F".equals(sexChar)) sex = "Female";
                 else if ("M".equals(sexChar)) sex = "Male";
 
                 String expiryStr = m2.group(4);
-                expiryDate = formatDate(expiryStr);
+                expiryDate = formatDate(expiryStr, true);
 
                 validation = validateCheckDigits(line1, line2);
             }
@@ -391,13 +391,14 @@ public class UgandaIdParser {
      * Format YYMMDD to YYYY-MM-DD with century inference.
      * Years 00-30 → 2000-2030; Years 31-99 → 1931-1999
      */
-    private static String formatDate(String yymmdd) {
+    private static String formatDate(String yymmdd, boolean isExpiry) {
         if (yymmdd == null || yymmdd.length() != 6 || !yymmdd.matches("\\d{6}")) {
             return "";
         }
         try {
             int yy = Integer.parseInt(yymmdd.substring(0, 2));
-            int year = (yy <= 30) ? 2000 + yy : 1900 + yy;
+            int cutoff = isExpiry ? 50 : 30;
+            int year = (yy <= cutoff) ? 2000 + yy : 1900 + yy;
             return year + "-" + yymmdd.substring(2, 4) + "-" + yymmdd.substring(4, 6);
         } catch (NumberFormatException e) {
             return "";
@@ -405,8 +406,16 @@ public class UgandaIdParser {
     }
 
     private static String padTo30(String s) {
-        if (s.length() >= 30) return s.substring(0, 30);
-        StringBuilder sb = new StringBuilder(s);
+        if (s == null) return "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<";
+        String clean = s.trim().replaceAll("\\s+", "");
+        if (clean.length() > 30) {
+            if (clean.length() == 31 && Character.isDigit(clean.charAt(30)) && clean.charAt(29) == '<') {
+                clean = clean.substring(0, 29) + clean.charAt(30);
+            } else {
+                clean = clean.substring(0, 30);
+            }
+        }
+        StringBuilder sb = new StringBuilder(clean);
         while (sb.length() < 30) sb.append('<');
         return sb.toString();
     }
