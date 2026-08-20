@@ -1,25 +1,35 @@
 /**
  * uganda-id-parser.js
- * Uganda National ID MRZ Parser — ICAO 9303 TD1 Compliant (ES6 & UMD Module)
+ * Uganda National ID MRZ Parser — Ugandan NID-Specific Check Digit Variant
  *
- * Confirmed field layout across test cards (Samuel, Mellisa, Timothy):
+ * ⚠️ CRITICAL: Ugandan National ID cards use DIRECT Modulo-10 check digits
+ * (sum % 10), NOT the standard ICAO 9303 complement formula
+ * (10 - (sum % 10)) % 10 used by passports and most other TD1 documents.
+ *
+ * Confirmed field layout across test cards (Samuel, Mellisa, Timothy, Elvis):
  *
  * Line 1 (30 chars): ID + UGA + {CARD_NUMBER:9} + {CD1:1} + {NIN:15, padded with <}
  * Line 2 (30 chars): {DOB:6} + {CD2:1} + {SEX:1} + {EXPIRY:6} + {CD3:1} + UGA + {FILLER:11} + {CD_COMPOSITE:1}
  * Line 3 (30 chars): {SURNAME}<<{GIVEN_NAME}<{OTHER_NAME}<<<<<<<<<<<<<<<<<<<<<<<<<<
  *
- * @version 2.0.0
+ * @version 2.1.0
  * @module UgandaIdParser
  */
 
+// ─────────────────────────────────────────────────────────────────────────────
 // Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const ValidationConfidence = Object.freeze({
     HIGH:   'HIGH',    // All 4 check digits pass
     MEDIUM: 'MEDIUM',  // 1 check digit fails — accept but flag
     REJECT: 'REJECT'   // 2+ check digits fail
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
 // Data Models
+// ─────────────────────────────────────────────────────────────────────────────
+
 export class ValidationResult {
     constructor(failureCount, confidence) {
         this.failureCount = failureCount;
@@ -57,7 +67,10 @@ export class CardRecord {
     }
 }
 
-// Parser Class
+// ─────────────────────────────────────────────────────────────────────────────
+// Parser
+// ─────────────────────────────────────────────────────────────────────────────
+
 export class UgandaIdParser {
 
     // NIN format validators
@@ -84,10 +97,22 @@ export class UgandaIdParser {
         ['H', '8'], ['L', '1']
     ]);
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // UGANDAN NID Check Digit Calculator (DIRECT Modulo-10)
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
-     * Calculate ICAO 9303 Modulo-10 check digit.
+     * Calculate Ugandan National ID DIRECT Modulo-10 check digit.
+     *
+     * ⚠️ NOTE: This is NOT the standard ICAO 9303 formula.
+     * Standard ICAO 9303: (10 - (sum % 10)) % 10
+     * Ugandan NIDs use:    sum % 10
+     *
      * Weights: 7, 3, 1 repeating.
      * Mapping: 0-9 → 0-9, A-Z → 10-35, < → 0
+     *
+     * @param {string} data
+     * @returns {number} 0-9
      */
     static calculateCheckDigit(data) {
         const weights = [7, 3, 1];
@@ -106,11 +131,20 @@ export class UgandaIdParser {
             }
             sum += value * weights[i % 3];
         }
-        return (10 - (sum % 10)) % 10;
+        // ⚠️ UGANDAN NID SPECIFIC: Direct modulo, NOT complement
+        return sum % 10;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Check Digit Validation
+    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Validate all check digits with graceful degradation.
+     *
+     * @param {string} line1 — 30-char MRZ line 1
+     * @param {string} line2 — 30-char MRZ line 2
+     * @returns {ValidationResult}
      */
     static validateCheckDigits(line1, line2) {
         if (!line1 || !line2 || line1.length !== 30 || line2.length !== 30) {
@@ -158,6 +192,10 @@ export class UgandaIdParser {
 
         return new ValidationResult(failures, confidence);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // NIN Normalizer
+    // ─────────────────────────────────────────────────────────────────────────
 
     static cleanMrzNameToken(token) {
         if (!token) return '';
@@ -226,14 +264,18 @@ export class UgandaIdParser {
             chars[0] = 'C';
         }
 
-        const oldCand = UgandaIdParser.tryNormalizeOldFormat(chars);
-        if (UgandaIdParser.OLD_NIN_REGEX.test(oldCand)) return oldCand;
-
         const newCand = UgandaIdParser.tryNormalizeNewFormat(chars);
         if (UgandaIdParser.NEW_NIN_REGEX.test(newCand)) return newCand;
 
+        const oldCand = UgandaIdParser.tryNormalizeOldFormat(chars);
+        if (UgandaIdParser.OLD_NIN_REGEX.test(oldCand)) return oldCand;
+
         return newCand.length === 14 ? newCand : oldCand;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Date Formatter
+    // ─────────────────────────────────────────────────────────────────────────
 
     static formatDate(yymmdd) {
         if (!yymmdd || yymmdd.length !== 6 || !/^\d{6}$/.test(yymmdd)) {
@@ -249,9 +291,20 @@ export class UgandaIdParser {
         return s.padEnd(30, '<');
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Main Parser
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Parse MRZ lines from OCR text output.
+     *
+     * @param {string[]} lines — Raw OCR text lines
+     * @returns {CardRecord|null} Parsed record, or null if MRZ cannot be decoded
+     */
     static parseMrzLines(lines) {
         if (!lines || lines.length === 0) return null;
 
+        // Step 1: Extract candidate MRZ lines
         const candidates = [];
         for (const l of lines) {
             const clean = l.trim().replace(/\s+/g, '').toUpperCase().replace(/€/g, 'C');
@@ -262,6 +315,7 @@ export class UgandaIdParser {
 
         if (candidates.length === 0) return null;
 
+        // Step 2: Identify line 1, line 2, line 3 by signature
         let line1 = null, line2 = null, line3 = null;
         for (const l of candidates) {
             if (l.startsWith('IDUGA') && l.length >= 30 && /\d{9}/.test(l)) {
@@ -273,6 +327,7 @@ export class UgandaIdParser {
             }
         }
 
+        // Fallback: assign by order if signatures fail
         if (line1 == null || line2 == null || line3 == null) {
             const longLines = candidates.filter(c => c.length >= 25);
             if (longLines.length >= 3) {
@@ -294,6 +349,7 @@ export class UgandaIdParser {
         if (line2 != null && line2.length < 30) line2 = UgandaIdParser.padTo30(line2);
         if (line3.length < 30) line3 = UgandaIdParser.padTo30(line3);
 
+        // Step 3: Parse Line 1
         let cardNumber = '';
         let nin = '';
         const m1 = UgandaIdParser.LINE1_REGEX.exec(line1);
@@ -308,6 +364,7 @@ export class UgandaIdParser {
             if (ninMatch) nin = UgandaIdParser.normalizeNinCandidate(ninMatch[0]);
         }
 
+        // Step 4: Parse Line 2
         let dob = '';
         let sex = 'Male';
         let expiryDate = '';
@@ -327,10 +384,12 @@ export class UgandaIdParser {
             }
         }
 
+        // Override sex based on NIN prefix (Ugandan convention)
         if (/^(CF|AF|PF)/i.test(nin)) {
             sex = 'Female';
         }
 
+        // Step 5: Parse Line 3 — Names
         let surname = '';
         let givenName = '';
         let otherName = '';
@@ -375,27 +434,8 @@ export class UgandaIdParser {
         record.validationFailures = validation.failureCount;
         record.expiryDate = expiryDate;
 
-        // Legacy compatibility properties
-        record.given_name = givenName;
-        record.other_name = otherName;
-        record.date_of_birth = dob;
-        record.card_number = cardNumber;
-
         return record;
     }
-
-    // Legacy method wrappers for backward compatibility
-    static parseMrzTextLines(lines) {
-        return UgandaIdParser.parseMrzLines(lines);
-    }
-}
-
-// UMD / Global Fallback for Non-Module Environments
-if (typeof window !== 'undefined') {
-    window.UgandaIdParser = UgandaIdParser;
-    window.UgIdParser = UgandaIdParser;
-    window.ValidationConfidence = ValidationConfidence;
-    window.CardRecord = CardRecord;
 }
 
 export default UgandaIdParser;
