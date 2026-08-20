@@ -1,40 +1,75 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<!--
+    AndroidManifest.xml — Complete FileProvider + Security Configuration
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.nssf.datacapture">
 
-    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- PERMISSIONS                                                             -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+    <!-- Camera permission for MRZ scanning -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
+    <!-- Read external storage for gallery photo picker (Android 12 and below) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Write external storage for legacy CSV export (optional, SAF preferred) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <!-- Hardware feature declarations -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- APPLICATION                                                             -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme">
+        android:theme="@style/AppTheme"
+        tools:targetApi="34">
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- MAIN ACTIVITY                                                         -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden">
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- FILE PROVIDER — Required for camera capture URI sharing               -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="com.nssf.datacapture.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
+
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
     </application>
 
 </manifest>
