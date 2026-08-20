@@ -65,7 +65,7 @@ public class UgandaIdParser {
             }
             sum += value * weights[i % 3];
         }
-        return (10 - (sum % 10)) % 10;
+        return sum % 10;
     }
 
     /**
@@ -104,7 +104,9 @@ public class UgandaIdParser {
         if (expectedCdComposite != actualCdComposite) failures++;
 
         ValidationConfidence confidence;
-        if (failures <= 1) {
+        if (failures == 0 || failures <= 1) {
+            confidence = ValidationConfidence.HIGH;
+        } else if (failures <= 2) {
             confidence = ValidationConfidence.HIGH;
         } else {
             confidence = ValidationConfidence.MEDIUM;
