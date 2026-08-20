@@ -181,14 +181,71 @@ public class UgandaIdParser {
         return newCand.length() == 14 ? newCand : oldCand;
     }
 
+    public static String fixDigitsOnly(String strVal) {
+        if (strVal == null) return "";
+        return strVal.replace('O', '0').replace('I', '1').replace('L', '1')
+                     .replace('S', '5').replace('B', '8').replace('G', '6')
+                     .replace('Z', '2').replace('A', '4').replace('E', '0')
+                     .replace('Q', '0').replace('€', '0').replace('T', '7')
+                     .replace('Y', '7').replace('P', '9');
+    }
+
+    public static String repairLine1(String rawLine1) {
+        if (rawLine1 == null || rawLine1.length() < 15) return rawLine1;
+        String line = rawLine1.trim().replaceAll("\\s+", "").toUpperCase().replace('€', 'C');
+        if (line.length() >= 5) {
+            String prefix = line.substring(0, 5);
+            if (prefix.matches("^[1IL|\\[][D0O]UGA$") || prefix.matches("^I[0O]UGA$") || prefix.matches("^ID[0O]GA$") || prefix.matches("^IDU[64]A$")) {
+                line = "IDUGA" + line.substring(5);
+            }
+        }
+        if (line.length() >= 14) {
+            String cardNumRaw = line.substring(5, 14);
+            String cardNumFixed = fixDigitsOnly(cardNumRaw);
+            char cd1 = line.charAt(14);
+            char cd1Fixed = Character.isDigit(cd1) ? cd1 : (LETTER_TO_DIGIT.containsKey(cd1) ? LETTER_TO_DIGIT.get(cd1) : cd1);
+            line = line.substring(0, 5) + cardNumFixed + cd1Fixed + (line.length() > 15 ? line.substring(15) : "");
+        }
+        return line;
+    }
+
+    public static String repairLine2(String rawLine2) {
+        if (rawLine2 == null || rawLine2.length() < 15) return rawLine2;
+        String line = padTo30(rawLine2.trim().replaceAll("\\s+", "").toUpperCase());
+        char[] chars = line.toCharArray();
+
+        for (int i = 0; i < 6; i++) {
+            if (LETTER_TO_DIGIT.containsKey(chars[i])) chars[i] = LETTER_TO_DIGIT.get(chars[i]);
+        }
+        if (LETTER_TO_DIGIT.containsKey(chars[6])) chars[6] = LETTER_TO_DIGIT.get(chars[6]);
+
+        if (chars[7] != 'M' && chars[7] != 'F') {
+            if (chars[7] == '1' || chars[7] == 'I' || chars[7] == 'L' || chars[7] == 'K') chars[7] = 'M';
+            else if (chars[7] == 'P' || chars[7] == 'E') chars[7] = 'F';
+        }
+
+        for (int i = 8; i < 14; i++) {
+            if (LETTER_TO_DIGIT.containsKey(chars[i])) chars[i] = LETTER_TO_DIGIT.get(chars[i]);
+        }
+        if (LETTER_TO_DIGIT.containsKey(chars[14])) chars[14] = LETTER_TO_DIGIT.get(chars[14]);
+
+        chars[15] = 'U'; chars[16] = 'G'; chars[17] = 'A';
+
+        if (chars.length >= 30 && LETTER_TO_DIGIT.containsKey(chars[29])) {
+            chars[29] = LETTER_TO_DIGIT.get(chars[29]);
+        }
+
+        return new String(chars);
+    }
+
     public static CardRecord parseMrzLines(List<String> lines) {
         if (lines == null || lines.isEmpty()) return null;
 
-        // Step 1: Extract candidate MRZ lines (30-char alphanumeric with MRZ signatures)
+        // Step 1: Extract candidate MRZ lines (alphanumeric with MRZ signatures)
         List<String> candidates = new ArrayList<>();
         for (String l : lines) {
             String clean = l.trim().replaceAll("\\s+", "").toUpperCase().replace('€', 'C');
-            if (clean.length() >= 25 && (clean.contains("IDUGA") || clean.contains("UGA") || clean.contains("<<"))) {
+            if (clean.length() >= 20 && (clean.contains("DUGA") || clean.contains("UGA") || clean.contains("<<") || clean.matches("^[1IL]D.*"))) {
                 candidates.add(clean);
             }
         }
@@ -198,12 +255,13 @@ public class UgandaIdParser {
         // Step 2: Identify line 1, line 2, line 3 by signature
         String line1 = null, line2 = null, line3 = null;
         for (String l : candidates) {
-            if (l.startsWith("IDUGA") && l.length() >= 30 && l.matches(".*\\d{9}.*")) {
-                line1 = l.length() >= 30 ? l.substring(0, 30) : l;
-            } else if (l.matches("^\\d{6}.*UGA.*") && l.length() >= 30) {
-                line2 = l.substring(0, 30);
+            String repaired = repairLine1(l);
+            if (repaired.startsWith("IDUGA") && repaired.length() >= 25) {
+                line1 = repaired.length() >= 30 ? repaired.substring(0, 30) : padTo30(repaired);
+            } else if ((l.contains("UGA") || l.matches(".*\\d{6}.*")) && l.length() >= 25 && !l.contains("<<") && !l.startsWith("IDUGA")) {
+                line2 = repairLine2(l);
             } else if (l.contains("<<") && l.length() >= 10) {
-                line3 = l.length() >= 30 ? l.substring(0, 30) : l;
+                line3 = l.length() >= 30 ? l.substring(0, 30) : padTo30(l);
             }
         }
 
@@ -214,23 +272,23 @@ public class UgandaIdParser {
                 if (c.length() >= 25) longLines.add(c);
             }
             if (longLines.size() >= 3) {
-                line1 = longLines.get(0).substring(0, Math.min(30, longLines.get(0).length()));
-                line2 = longLines.get(1).substring(0, Math.min(30, longLines.get(1).length()));
-                line3 = longLines.get(2).substring(0, Math.min(30, longLines.get(2).length()));
+                line1 = padTo30(repairLine1(longLines.get(0)));
+                line2 = repairLine2(longLines.get(1));
+                line3 = padTo30(longLines.get(2));
             } else if (longLines.size() >= 2) {
-                line1 = longLines.get(0).substring(0, Math.min(30, longLines.get(0).length()));
+                line1 = padTo30(repairLine1(longLines.get(0)));
                 if (line1.contains("IDUGA")) {
-                    line2 = longLines.get(1).substring(0, Math.min(30, longLines.get(1).length()));
+                    line2 = repairLine2(longLines.get(1));
                 } else {
-                    line3 = longLines.get(1).substring(0, Math.min(30, longLines.get(1).length()));
+                    line3 = padTo30(longLines.get(1));
                 }
             }
         }
 
         if (line1 == null || line3 == null) return null;
-        if (line1.length() < 30) line1 = padTo30(line1);
-        if (line2 != null && line2.length() < 30) line2 = padTo30(line2);
-        if (line3.length() < 30) line3 = padTo30(line3);
+        line1 = padTo30(repairLine1(line1));
+        if (line2 != null) line2 = repairLine2(line2);
+        line3 = padTo30(line3);
 
         // Step 3: Parse Line 1 — IDUGA + Card Number + CD1 + NIN field
         String cardNumber = "";
@@ -241,7 +299,6 @@ public class UgandaIdParser {
             String ninField = m1.group(3).replace("<", "");
             nin = normalizeNinCandidate(ninField);
         } else {
-            // Fallback regex
             Matcher cardMatch = Pattern.compile("IDUGA(\\d{9})").matcher(line1);
             if (cardMatch.find()) cardNumber = cardMatch.group(1);
             Matcher ninMatch = Pattern.compile("[A-Z]{2}\\d{8,10}[A-Z]{2,3}").matcher(line1);
@@ -267,7 +324,6 @@ public class UgandaIdParser {
                 String expiryStr = m2.group(4);
                 expiryDate = formatDate(expiryStr);
 
-                // Run check digit validation
                 validation = validateCheckDigits(line1, line2);
             }
         }

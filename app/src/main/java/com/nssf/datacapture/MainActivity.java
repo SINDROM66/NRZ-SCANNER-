@@ -27,11 +27,15 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.FileProvider;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -75,6 +79,22 @@ public class MainActivity extends AppCompatActivity {
                     if (uri != null) {
                         processImageUriForMrz(uri);
                     }
+                }
+            });
+
+    private Uri cameraPhotoUri;
+
+    private final ActivityResultLauncher<Uri> cameraLauncher =
+            registerForActivityResult(new ActivityResultContracts.TakePicture(), success -> {
+                if (success && cameraPhotoUri != null) {
+                    processImageUriForMrz(cameraPhotoUri);
+                }
+            });
+
+    private final ActivityResultLauncher<String> createCsvLauncher =
+            registerForActivityResult(new ActivityResultContracts.CreateDocument("text/csv"), uri -> {
+                if (uri != null) {
+                    writeCsvToUri(uri);
                 }
             });
 
@@ -130,14 +150,36 @@ public class MainActivity extends AppCompatActivity {
         btnExportCsv = findViewById(R.id.btnExportCsv);
         lvRecords = findViewById(R.id.lvRecords);
 
-        btnChoosePhoto.setOnClickListener(v -> {
-            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-            intent.setType("image/*");
-            photoPickerLauncher.launch(intent);
-        });
+        btnChoosePhoto.setOnClickListener(v -> showImageSourceDialog());
 
         btnSaveRecord.setOnClickListener(v -> saveRecordFromInputs());
         btnExportCsv.setOnClickListener(v -> exportRecordsToCsv());
+    }
+
+    private void showImageSourceDialog() {
+        String[] options = {"📷 Take Photo with Camera", "🖼️ Choose from Gallery"};
+        new AlertDialog.Builder(this)
+                .setTitle("Select MRZ Image Source")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 101);
+                            return;
+                        }
+                        try {
+                            File photoFile = File.createTempFile("mrz_camera_", ".jpg", getExternalFilesDir(Environment.DIRECTORY_PICTURES));
+                            cameraPhotoUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", photoFile);
+                            cameraLauncher.launch(cameraPhotoUri);
+                        } catch (Exception e) {
+                            Toast.makeText(this, "Failed to launch camera: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    } else {
+                        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                        intent.setType("image/*");
+                        photoPickerLauncher.launch(intent);
+                    }
+                })
+                .show();
     }
 
     private void setupTabLayout() {
@@ -299,8 +341,20 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        StringBuilder csv = new StringBuilder("SURNAME,GIVEN_NAME,OTHER_NAME,SEX,DATE_OF_BIRTH,NATIONALITY,NIN,CARD_NUMBER,PHONE_NUMBER,SOURCE\n");
+        String fileName = "nssf_member_records_" + System.currentTimeMillis() + ".csv";
+        try {
+            createCsvLauncher.launch(fileName);
+        } catch (Exception e) {
+            Toast.makeText(this, "Error launching download picker: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void writeCsvToUri(Uri uri) {
+        StringBuilder csv = new StringBuilder("SCHEMA_VERSION,SURNAME,GIVEN_NAME,OTHER_NAME,SEX,DATE_OF_BIRTH,NATIONALITY,NIN,CARD_NUMBER,PHONE_NUMBER,VALIDATION_STATUS,SOURCE\n");
         for (CardRecord r : savedRecords) {
+            String status = r.validationConfidence == UgandaIdParser.ValidationConfidence.HIGH ? "HIGH" :
+                           r.validationConfidence == UgandaIdParser.ValidationConfidence.MEDIUM ? "MEDIUM" : "REJECT";
+            csv.append("\"2.0.0\",");
             csv.append("\"").append(r.surname).append("\",");
             csv.append("\"").append(r.givenName).append("\",");
             csv.append("\"").append(r.otherName).append("\",");
@@ -310,17 +364,17 @@ public class MainActivity extends AppCompatActivity {
             csv.append("\"").append(r.nin).append("\",");
             csv.append("\"").append(r.cardNumber).append("\",");
             csv.append("\"").append(r.phoneNumber).append("\",");
+            csv.append("\"").append(status).append("\",");
             csv.append("\"").append(r.source).append("\"\n");
         }
 
-        String fileName = "nssf_member_records_" + System.currentTimeMillis() + ".csv";
-        File file = new File(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), fileName);
-
-        try (FileOutputStream fos = new FileOutputStream(file)) {
-            fos.write(csv.toString().getBytes());
-            Toast.makeText(this, "📄 CSV Exported to: " + file.getName(), Toast.LENGTH_LONG).show();
+        try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+            if (os != null) {
+                os.write(csv.toString().getBytes(StandardCharsets.UTF_8));
+                Toast.makeText(this, "📄 CSV Saved to Downloads!", Toast.LENGTH_LONG).show();
+            }
         } catch (Exception e) {
-            Toast.makeText(this, "Error exporting CSV: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Error saving CSV: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 }
