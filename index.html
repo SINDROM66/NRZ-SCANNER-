@@ -217,9 +217,9 @@
     <!-- Photo Modal -->
     <div id="photo-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;">
         <div class="card" style="width: 100%; max-width: 320px;">
-            <div class="card-title" style="margin-bottom: 16px;">Select Photo Source</div>
-            <button id="btn-camera" class="btn btn-primary" style="width: 100%; margin-bottom: 8px;">Take Photo (Camera)</button>
-            <button id="btn-gallery" class="btn btn-outline" style="width: 100%; margin-bottom: 16px;">Choose from Gallery</button>
+            <div class="card-title" style="margin-bottom: 16px;">Select Image Source</div>
+            <label for="input-camera" id="btn-camera" class="btn btn-primary" style="display: flex; align-items: center; justify-content: center; width: 100%; margin-bottom: 10px; cursor: pointer; text-align: center;">📷 Take Photo with Camera</label>
+            <label for="input-gallery" id="btn-gallery" class="btn btn-outline" style="display: flex; align-items: center; justify-content: center; width: 100%; margin-bottom: 16px; cursor: pointer; text-align: center;">🖼️ Upload from Gallery</label>
             <button id="btn-cancel-modal" class="btn btn-ghost" style="width: 100%;">Cancel</button>
             
             <input type="file" id="input-camera" accept="image/*" capture="environment" style="display: none;">

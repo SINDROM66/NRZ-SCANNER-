@@ -250,8 +250,16 @@ function setupScannerAndModal() {
     triggerUploadBtn.addEventListener('click', () => photoModal.classList.remove('hidden'));
     btnCancelModal.addEventListener('click', () => photoModal.classList.add('hidden'));
 
-    btnCamera.addEventListener('click', () => inputCamera.click());
-    btnGallery.addEventListener('click', () => inputGallery.click());
+    if (btnCamera && inputCamera) {
+        btnCamera.addEventListener('click', () => {
+            photoModal.classList.add('hidden');
+        });
+    }
+    if (btnGallery && inputGallery) {
+        btnGallery.addEventListener('click', () => {
+            photoModal.classList.add('hidden');
+        });
+    }
 
     function handleFileSelection(file) {
         if (!file) return;

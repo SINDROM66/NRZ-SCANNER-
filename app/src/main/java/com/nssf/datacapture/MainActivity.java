@@ -160,7 +160,7 @@ public class MainActivity extends AppCompatActivity implements MrzRepairEngine.R
     private void showImageSourceDialog() {
         new AlertDialog.Builder(this)
             .setTitle("Select Image Source")
-            .setItems(new String[]{"📷 Camera", "🖼️ Gallery"}, (dialog, which) -> {
+            .setItems(new String[]{"📷 Take Photo with Camera", "🖼️ Upload from Gallery"}, (dialog, which) -> {
                 if (which == 0) launchCamera();
                 else launchGallery();
             })
