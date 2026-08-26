@@ -3,6 +3,16 @@ package com.nssf.datacapture;
 import com.nssf.datacapture.UgandaIdParser.ValidationConfidence;
 
 public class CardRecord {
+    public enum Source {
+        MRZ("Native Google ML Kit MRZ OCR"),
+        PDF417_BARCODE("PDF417 2D Barcode"),
+        MANUAL("Manual Operator Input");
+
+        private final String label;
+        Source(String label) { this.label = label; }
+        public String getLabel() { return label; }
+    }
+
     public String surname = "";
     public String givenName = "";
     public String otherName = "";
@@ -11,7 +21,8 @@ public class CardRecord {
     public String nin = "";
     public String cardNumber = "";
     public String phoneNumber = "";
-    public String source = "Native Google ML Kit MRZ OCR";
+    public String source = Source.MRZ.getLabel();
+    public Source captureSource = Source.MRZ;
 
     // MRZ validation metadata
     public ValidationConfidence validationConfidence = ValidationConfidence.HIGH;

@@ -26,6 +26,12 @@ export const ValidationConfidence = Object.freeze({
     REJECT: 'REJECT'   // 2+ check digits fail
 });
 
+export const CaptureSource = Object.freeze({
+    MRZ: 'MRZ',
+    PDF417_BARCODE: 'PDF417_BARCODE',
+    MANUAL: 'MANUAL'
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Data Models
 // ─────────────────────────────────────────────────────────────────────────────
