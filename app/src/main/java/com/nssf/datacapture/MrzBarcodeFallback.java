@@ -107,7 +107,7 @@ public class MrzBarcodeFallback {
             record.nin = parts[5].trim();
             if (parts.length > 6) record.cardNumber = parts[6].trim();
             if (parts.length > 7) record.expiryDate = parts[7].trim();
-            record.source = "PDF417 Barcode";
+            record.setCaptureSource(CardRecord.CaptureSource.PDF417_BARCODE);
             record.validationConfidence = UgandaIdParser.ValidationConfidence.HIGH;
             return record;
         } catch (Exception e) {

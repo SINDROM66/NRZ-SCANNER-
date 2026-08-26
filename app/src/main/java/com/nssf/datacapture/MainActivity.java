@@ -388,8 +388,9 @@ public class MainActivity extends AppCompatActivity implements MrzRepairEngine.R
             etNin.getText().toString().trim(),
             etCardNumber.getText().toString().trim(),
             phone,
-            "Native Google ML Kit MRZ OCR"
+            CardRecord.CaptureSource.MANUAL.getLabel()
         );
+        record.setCaptureSource(CardRecord.CaptureSource.MANUAL);
 
         savedRecords.add(record);
         Toast.makeText(this, "✅ Record Saved Offline!", Toast.LENGTH_SHORT).show();
