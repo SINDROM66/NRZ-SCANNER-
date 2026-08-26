@@ -98,19 +98,19 @@ public class UgandaIdParser {
         int actualCd3 = Character.getNumericValue(line2.charAt(14));
         if (expectedCd3 != actualCd3) failures++;
 
-        // CD_COMPOSITE: Over line1[5:30] + line2[0:29] (54 chars total)
-        String compositeData = line1.substring(5, 30) + line2.substring(0, 29);
+        // CD_COMPOSITE: Standard ICAO 9303 Part 5 (TD1): line1[5..29] + line2[0..6] + line2[8..14] + line2[18..28] (50 chars total)
+        String compositeData = line1.substring(5, 30) + line2.substring(0, 7) + line2.substring(8, 15) + line2.substring(18, 29);
         int expectedCdComposite = calculateCheckDigit(compositeData);
         int actualCdComposite = Character.getNumericValue(line2.charAt(29));
         if (expectedCdComposite != actualCdComposite) failures++;
 
         ValidationConfidence confidence;
-        if (failures == 0 || failures <= 1) {
+        if (failures == 0) {
             confidence = ValidationConfidence.HIGH;
-        } else if (failures <= 2) {
-            confidence = ValidationConfidence.HIGH;
-        } else {
+        } else if (failures == 1) {
             confidence = ValidationConfidence.MEDIUM;
+        } else {
+            confidence = ValidationConfidence.REJECT;
         }
 
         return new ValidationResult(failures, confidence);
@@ -136,6 +136,12 @@ public class UgandaIdParser {
         if (candidate == null || candidate.isEmpty()) return "";
         String v = candidate.toUpperCase().replace('€', 'C').replaceAll("[^A-Z0-9]", "");
 
+        // If candidate starts with valid NID prefix (CM, CF, AF, PF, AM, PM) and has trailing OCR noise/fillers, extract exact 14 chars
+        Matcher prefixMatcher = Pattern.compile("(CM|CF|AF|PF|AM|PM)[A-Z0-9]{12}").matcher(v);
+        if (prefixMatcher.find()) {
+            v = prefixMatcher.group(0);
+        }
+
         if (v.length() == 15 && v.matches("^[CAP][MF][O0I1L][A-Z0-9]{12}$")) {
             v = v.substring(0, 2) + v.substring(3);
         }
@@ -147,6 +153,10 @@ public class UgandaIdParser {
             } else {
                 return "";
             }
+        }
+
+        if (v.length() > 14) {
+            v = v.substring(0, 14);
         }
 
         char[] chars = v.toCharArray();
@@ -162,7 +172,7 @@ public class UgandaIdParser {
             return normalized;
         }
 
-        return normalized.length() == 14 ? normalized : v;
+        return normalized.length() >= 14 ? normalized.substring(0, 14) : v;
     }
 
     public static String fixDigitsOnly(String strVal) {

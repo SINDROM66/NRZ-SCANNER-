@@ -177,8 +177,8 @@ export class UgandaIdParser {
         const actualCd3 = parseInt(line2[14], 10);
         if (expectedCd3 !== actualCd3) failures++;
 
-        // CD_COMPOSITE: line1[5:30] + line2[0:29] = 54 chars
-        const compositeData = line1.slice(5, 30) + line2.slice(0, 29);
+        // CD_COMPOSITE: Standard ICAO 9303 Part 5 (TD1): line1[5..29] + line2[0..6] + line2[8..14] + line2[18..28] (50 chars)
+        const compositeData = line1.slice(5, 30) + line2.slice(0, 7) + line2.slice(8, 15) + line2.slice(18, 29);
         const expectedCdComposite = UgandaIdParser.calculateCheckDigit(compositeData);
         const actualCdComposite = parseInt(line2[29], 10);
         if (expectedCdComposite !== actualCdComposite) failures++;
@@ -231,6 +231,12 @@ export class UgandaIdParser {
         if (!candidate) return '';
         let v = candidate.toUpperCase().replace(/€/g, 'C').replace(/[^A-Z0-9]/g, '');
 
+        // If candidate starts with valid NID prefix (CM, CF, AF, PF, AM, PM) and has trailing OCR noise/fillers, extract exact 14 chars
+        const prefixMatch = v.match(/(?:CM|CF|AF|PF|AM|PM)[A-Z0-9]{12}/);
+        if (prefixMatch) {
+            v = prefixMatch[0];
+        }
+
         if (v.length === 15 && /^[CAP][MF][O0I1L][A-Z0-9]{12}$/.test(v)) {
             v = v.slice(0, 2) + v.slice(3);
         }
@@ -242,6 +248,10 @@ export class UgandaIdParser {
             } else {
                 return '';
             }
+        }
+
+        if (v.length > 14) {
+            v = v.slice(0, 14);
         }
 
         const chars = v.split('');
@@ -257,7 +267,7 @@ export class UgandaIdParser {
         const normalized = UgandaIdParser.tryNormalizeFormat(chars);
         if (UgandaIdParser.UGANDA_NIN_REGEX.test(normalized)) return normalized;
 
-        return normalized.length === 14 ? normalized : v;
+        return normalized.length >= 14 ? normalized.slice(0, 14) : v;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
