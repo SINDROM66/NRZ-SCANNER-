@@ -72,6 +72,14 @@ public class CardRecord {
         this.cardNumber = cardNumber;
         this.phoneNumber = phoneNumber;
         this.source = source;
+        if (source != null) {
+            for (CaptureSource cs : CaptureSource.values()) {
+                if (cs.getLabel().equalsIgnoreCase(source) || source.contains(cs.name())) {
+                    this.captureSource = cs;
+                    break;
+                }
+            }
+        }
     }
 
     /**
