@@ -4,9 +4,9 @@
  */
 
 const UgIdParser = (function() {
-    const NIN_REGEX = /^[A-Z]{2}[0-9]{2}[A-Z0-9]{10}$/i;
-    const OLD_NIN_REGEX = /^[A-Z]{2}[0-9]{9}[A-Z]{3}$/i;
-    const NEW_NIN_REGEX = /^[A-Z]{2}[0-9]{10}[A-Z]{2}$/i;
+    const UGANDA_NIN_REGEX = /^[A-Z]{2}[0-9]{7}[A-Z0-9]{5}$/i;
+    const OLD_NIN_REGEX = /^[A-Z]{2}[0-9]{7}[A-Z0-9]{5}$/i;
+    const NEW_NIN_REGEX = /^[A-Z]{2}[0-9]{7}[A-Z0-9]{5}$/i;
 
     const DIGIT_TO_LETTER = {'0': 'O', '1': 'I', '5': 'S', '8': 'B', '6': 'G', '4': 'A', '2': 'Z', '3': 'J'};
     const LETTER_TO_DIGIT = {
@@ -21,25 +21,13 @@ const UgIdParser = (function() {
         return s.replace(/[^A-Z]/g, '');
     }
 
-    function tryNormalizeOldFormat(chars) {
+    function tryNormalizeFormat(chars) {
         let c = [...chars];
-        for (let i = 2; i < 11 && i < c.length; i++) {
+        // Positions 2..8 (7 chars): Must be DIGITS
+        for (let i = 2; i <= 8 && i < c.length; i++) {
             if (LETTER_TO_DIGIT[c[i]]) c[i] = LETTER_TO_DIGIT[c[i]];
         }
-        for (let i = 11; i < 14 && i < c.length; i++) {
-            if (DIGIT_TO_LETTER[c[i]]) c[i] = DIGIT_TO_LETTER[c[i]];
-        }
-        return c.join('');
-    }
-
-    function tryNormalizeNewFormat(chars) {
-        let c = [...chars];
-        for (let i = 2; i < 12 && i < c.length; i++) {
-            if (LETTER_TO_DIGIT[c[i]]) c[i] = LETTER_TO_DIGIT[c[i]];
-        }
-        for (let i = 12; i < 14 && i < c.length; i++) {
-            if (DIGIT_TO_LETTER[c[i]]) c[i] = DIGIT_TO_LETTER[c[i]];
-        }
+        // Positions 9..13 (5 chars): Alphanumeric serial - PRESERVE AS-IS!
         return c.join('');
     }
 
@@ -70,24 +58,10 @@ const UgIdParser = (function() {
 
         if (['N', 'H', 'K', 'R', 'P'].includes(chars[1])) chars[1] = 'M';
 
-        let oldCand = tryNormalizeOldFormat(chars);
-        if (OLD_NIN_REGEX.test(oldCand)) return oldCand;
+        let normalized = tryNormalizeFormat(chars);
+        if (UGANDA_NIN_REGEX.test(normalized)) return normalized;
 
-        let newCand = tryNormalizeNewFormat(chars);
-        if (NEW_NIN_REGEX.test(newCand)) return newCand;
-
-        // General Positional Repair
-        let charsFuzzy = [...chars];
-        for (let i = 2; i < 11; i++) {
-            if (LETTER_TO_DIGIT[charsFuzzy[i]]) charsFuzzy[i] = LETTER_TO_DIGIT[charsFuzzy[i]];
-        }
-        for (let i = 11; i < 14; i++) {
-            if (DIGIT_TO_LETTER[charsFuzzy[i]]) charsFuzzy[i] = DIGIT_TO_LETTER[charsFuzzy[i]];
-        }
-        let fuzzyCand = charsFuzzy.join('');
-        if (OLD_NIN_REGEX.test(fuzzyCand) || NEW_NIN_REGEX.test(fuzzyCand)) return fuzzyCand;
-
-        return newCand.length === 14 ? newCand : (oldCand.length === 14 ? oldCand : fuzzyCand);
+        return normalized.length === 14 ? normalized : v;
     }
 
     function decodeBase64Utf8(str) {

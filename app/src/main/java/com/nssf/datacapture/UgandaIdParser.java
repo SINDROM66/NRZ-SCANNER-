@@ -18,9 +18,10 @@ import java.util.regex.Pattern;
  */
 public class UgandaIdParser {
 
-    // NIN format validators
-    private static final Pattern OLD_NIN_REGEX = Pattern.compile("^[A-Z]{2}[0-9]{9}[A-Z]{3}$", Pattern.CASE_INSENSITIVE);
-    private static final Pattern NEW_NIN_REGEX = Pattern.compile("^[A-Z]{2}[0-9]{10}[A-Z]{2}$", Pattern.CASE_INSENSITIVE);
+    // NIN format validator (Ugandan National ID: 2 letters + 7 digits + 5 mixed alphanumeric serial chars)
+    private static final Pattern UGANDA_NIN_REGEX = Pattern.compile("^[A-Z]{2}[0-9]{7}[A-Z0-9]{5}$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern OLD_NIN_REGEX = Pattern.compile("^[A-Z]{2}[0-9]{7}[A-Z0-9]{5}$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern NEW_NIN_REGEX = Pattern.compile("^[A-Z]{2}[0-9]{7}[A-Z0-9]{5}$", Pattern.CASE_INSENSITIVE);
 
     // MRZ line validators (exact 30-char TD1)
     private static final Pattern LINE1_REGEX = Pattern.compile("^IDUGA(\\d{9})(\\d)([A-Z0-9<]{15})$");
@@ -121,25 +122,13 @@ public class UgandaIdParser {
         return s.replaceAll("[^A-Z]", "");
     }
 
-    private static String tryNormalizeOldFormat(char[] chars) {
+    private static String tryNormalizeFormat(char[] chars) {
         char[] c = chars.clone();
-        for (int i = 2; i < 11 && i < c.length; i++) {
+        // Positions 2..8 (7 chars): Must be DIGITS
+        for (int i = 2; i <= 8 && i < c.length; i++) {
             if (LETTER_TO_DIGIT.containsKey(c[i])) c[i] = LETTER_TO_DIGIT.get(c[i]);
         }
-        for (int i = 11; i < 14 && i < c.length; i++) {
-            if (DIGIT_TO_LETTER.containsKey(c[i])) c[i] = DIGIT_TO_LETTER.get(c[i]);
-        }
-        return new String(c);
-    }
-
-    private static String tryNormalizeNewFormat(char[] chars) {
-        char[] c = chars.clone();
-        for (int i = 2; i < 12 && i < c.length; i++) {
-            if (LETTER_TO_DIGIT.containsKey(c[i])) c[i] = LETTER_TO_DIGIT.get(c[i]);
-        }
-        for (int i = 12; i < 14 && i < c.length; i++) {
-            if (DIGIT_TO_LETTER.containsKey(c[i])) c[i] = DIGIT_TO_LETTER.get(c[i]);
-        }
+        // Positions 9..13 (5 chars): Alphanumeric serial - PRESERVE AS-IS!
         return new String(c);
     }
 
@@ -164,23 +153,16 @@ public class UgandaIdParser {
         for (int i = 0; i <= 1 && i < chars.length; i++) {
             if (DIGIT_TO_LETTER.containsKey(chars[i])) chars[i] = DIGIT_TO_LETTER.get(chars[i]);
         }
-        if (chars.length > 0 && (chars[0] == 'I' || chars[0] == '1' || chars[0] == 'O' || chars[0] == '0')) {
+        if (chars.length > 0 && (chars[0] == 'I' || chars[0] == '1' || chars[0] == '0' || chars[0] == 'O')) {
             chars[0] = 'C';
         }
 
-        // Prioritize Old Gen NIN layout if position 11 is a non-numeric letter (e.g. U, X, Y, V)
-        if (v.length() >= 14 && Character.isLetter(v.charAt(11)) && v.charAt(11) != 'O' && v.charAt(11) != 'I' && v.charAt(11) != 'S' && v.charAt(11) != 'B' && v.charAt(11) != 'G' && v.charAt(11) != 'A' && v.charAt(11) != 'Z') {
-            String oldCand = tryNormalizeOldFormat(chars);
-            if (OLD_NIN_REGEX.matcher(oldCand).matches()) return oldCand;
+        String normalized = tryNormalizeFormat(chars);
+        if (UGANDA_NIN_REGEX.matcher(normalized).matches()) {
+            return normalized;
         }
 
-        String oldCand = tryNormalizeOldFormat(chars);
-        if (OLD_NIN_REGEX.matcher(oldCand).matches()) return oldCand;
-
-        String newCand = tryNormalizeNewFormat(chars);
-        if (NEW_NIN_REGEX.matcher(newCand).matches()) return newCand;
-
-        return newCand.length() == 14 ? newCand : oldCand;
+        return normalized.length() == 14 ? normalized : v;
     }
 
     public static String fixDigitsOnly(String strVal) {

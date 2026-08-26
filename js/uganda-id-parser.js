@@ -207,33 +207,17 @@ export class UgandaIdParser {
         return s.replace(/[^A-Z]/gi, '').toUpperCase();
     }
 
-    static tryNormalizeOldFormat(chars) {
-        const c = [...chars];
-        for (let i = 2; i < 11 && i < c.length; i++) {
-            if (UgandaIdParser.LETTER_TO_DIGIT.has(c[i])) {
-                c[i] = UgandaIdParser.LETTER_TO_DIGIT.get(c[i]);
-            }
-        }
-        for (let i = 11; i < 14 && i < c.length; i++) {
-            if (UgandaIdParser.DIGIT_TO_LETTER.has(c[i])) {
-                c[i] = UgandaIdParser.DIGIT_TO_LETTER.get(c[i]);
-            }
-        }
-        return c.join('');
-    }
+    static UGANDA_NIN_REGEX = /^[A-Z]{2}[0-9]{7}[A-Z0-9]{5}$/i;
 
-    static tryNormalizeNewFormat(chars) {
+    static tryNormalizeFormat(chars) {
         const c = [...chars];
-        for (let i = 2; i < 12 && i < c.length; i++) {
+        // Positions 2..8 (7 chars): Must be DIGITS
+        for (let i = 2; i <= 8 && i < c.length; i++) {
             if (UgandaIdParser.LETTER_TO_DIGIT.has(c[i])) {
                 c[i] = UgandaIdParser.LETTER_TO_DIGIT.get(c[i]);
             }
         }
-        for (let i = 12; i < 14 && i < c.length; i++) {
-            if (UgandaIdParser.DIGIT_TO_LETTER.has(c[i])) {
-                c[i] = UgandaIdParser.DIGIT_TO_LETTER.get(c[i]);
-            }
-        }
+        // Positions 9..13 (5 chars): Alphanumeric serial - PRESERVE AS-IS!
         return c.join('');
     }
 
@@ -264,13 +248,10 @@ export class UgandaIdParser {
             chars[0] = 'C';
         }
 
-        const newCand = UgandaIdParser.tryNormalizeNewFormat(chars);
-        if (UgandaIdParser.NEW_NIN_REGEX.test(newCand)) return newCand;
+        const normalized = UgandaIdParser.tryNormalizeFormat(chars);
+        if (UgandaIdParser.UGANDA_NIN_REGEX.test(normalized)) return normalized;
 
-        const oldCand = UgandaIdParser.tryNormalizeOldFormat(chars);
-        if (UgandaIdParser.OLD_NIN_REGEX.test(oldCand)) return oldCand;
-
-        return newCand.length === 14 ? newCand : oldCand;
+        return normalized.length === 14 ? normalized : v;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
