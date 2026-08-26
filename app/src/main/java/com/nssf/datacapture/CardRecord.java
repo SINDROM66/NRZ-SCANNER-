@@ -12,7 +12,8 @@ import com.nssf.datacapture.UgandaIdParser.ValidationConfidence;
 public class CardRecord {
 
     /**
-     * Enum tracking the exact provenance/capture mechanism for audit trails
+     * Enum tracking the exact provenance/capture mechanism for audit trails.
+     * Used by NIRA sync workers to determine validation strategy.
      */
     public enum CaptureSource {
         MRZ("Native Google ML Kit MRZ OCR"),
@@ -30,68 +31,85 @@ public class CardRecord {
         }
     }
 
-    // Identity & Name Fields
+    // Core Identity Fields
     public String surname = "";
     public String givenName = "";
     public String otherName = "";
 
-    // Demographics
+    // Demographic Fields
     public String sex = "Male";
     public String dateOfBirth = "";
     public String expiryDate = "";
 
-    // Document Identifiers
+    // Document Fields
     public String nin = "";
     public String cardNumber = "";
 
-    // NSSF Registration Data
+    // NSSF-Specific Fields
     public String phoneNumber = "";
 
-    // Provenance & Telemetry Metadata
+    // Provenance & Audit Fields
     public String source = CaptureSource.MRZ.getLabel();
     public CaptureSource captureSource = CaptureSource.MRZ;
 
-    // Validation Metadata
+    // MRZ Validation Metadata
     public ValidationConfidence validationConfidence = ValidationConfidence.HIGH;
     public int validationFailures = 0;
 
-    /**
-     * Default No-Arg Constructor
-     */
+    // Default no-arg constructor
     public CardRecord() {}
 
-    /**
-     * Primary Parameterized Constructor
-     */
+    // Full constructor
     public CardRecord(String surname, String givenName, String otherName, String sex,
                       String dateOfBirth, String nin, String cardNumber,
                       String phoneNumber, String source) {
-        this.surname = surname != null ? surname : "";
-        this.givenName = givenName != null ? givenName : "";
-        this.otherName = otherName != null ? otherName : "";
-        this.sex = sex != null ? sex : "Male";
-        this.dateOfBirth = dateOfBirth != null ? dateOfBirth : "";
-        this.nin = nin != null ? nin : "";
-        this.cardNumber = cardNumber != null ? cardNumber : "";
-        this.phoneNumber = phoneNumber != null ? phoneNumber : "";
-        this.source = source != null ? source : CaptureSource.MRZ.getLabel();
-        this.captureSource = deriveCaptureSource(this.source);
+        this.surname = surname;
+        this.givenName = givenName;
+        this.otherName = otherName;
+        this.sex = sex;
+        this.dateOfBirth = dateOfBirth;
+        this.nin = nin;
+        this.cardNumber = cardNumber;
+        this.phoneNumber = phoneNumber;
+        this.source = source;
     }
 
     /**
-     * Helper to set capture source and label atomically
+     * Atomic helper: sets both the enum and its string label in one call.
+     * Prevents captureSource and source from drifting out of sync.
      */
     public void setCaptureSource(CaptureSource src) {
-        if (src != null) {
-            this.captureSource = src;
-            this.source = src.getLabel();
+        this.captureSource = src;
+        this.source = src.getLabel();
+    }
+
+    /**
+     * Display name for list views.
+     */
+    public String getDisplayName() {
+        return surname + " " + givenName + " - NIN: " + nin;
+    }
+
+    /**
+     * Validation badge emoji for UI lists.
+     */
+    public String getValidationBadge() {
+        switch (validationConfidence) {
+            case HIGH:   return "✓";
+            case MEDIUM: return "~";
+            case REJECT: return "✗";
+            default:     return "?";
         }
     }
 
-    private CaptureSource deriveCaptureSource(String srcLabel) {
-        if (srcLabel == null) return CaptureSource.MRZ;
-        if (srcLabel.contains("Barcode") || srcLabel.contains("PDF417")) return CaptureSource.PDF417_BARCODE;
-        if (srcLabel.contains("Manual") || srcLabel.contains("Input")) return CaptureSource.MANUAL;
-        return CaptureSource.MRZ;
+    @Override
+    public String toString() {
+        return "CardRecord{" +
+                "surname='" + surname + '\'' +
+                ", givenName='" + givenName + '\'' +
+                ", nin='" + nin + '\'' +
+                ", captureSource=" + captureSource +
+                ", validationConfidence=" + validationConfidence +
+                '}';
     }
 }
