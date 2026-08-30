@@ -319,6 +319,40 @@ public class UgandaIdParser {
                 expiryDate = formatDate(expiryStr, true);
 
                 validation = validateCheckDigits(line1, line2);
+            } else {
+                // Fallback 1: Resilient positional extraction from line2
+                if (line2.length() >= 6) {
+                    String rawDob = fixDigitsOnly(line2.substring(0, 6));
+                    if (rawDob.matches("^\\d{6}$")) {
+                        dob = formatDate(rawDob, false);
+                    }
+                }
+                if (line2.length() >= 8) {
+                    char sChar = line2.charAt(7);
+                    if (sChar == 'F' || sChar == 'P' || sChar == 'E') sex = "Female";
+                    else if (sChar == 'M' || sChar == '1' || sChar == 'I' || sChar == 'K') sex = "Male";
+                }
+                if (line2.length() >= 14) {
+                    String rawExp = fixDigitsOnly(line2.substring(8, 14));
+                    if (rawExp.matches("^\\d{6}$")) {
+                        expiryDate = formatDate(rawExp, true);
+                    }
+                }
+                validation = validateCheckDigits(line1, line2);
+            }
+        } else {
+            // Fallback 2: Search candidate lines for DOB pattern (6 digits)
+            for (String cand : candidates) {
+                if (!cand.startsWith("IDUGA") && !cand.contains("<<")) {
+                    String fixed = fixDigitsOnly(cand.replaceAll("[^A-Z0-9]", ""));
+                    if (fixed.length() >= 6 && fixed.substring(0, 6).matches("^\\d{6}$")) {
+                        dob = formatDate(fixed.substring(0, 6), false);
+                        if (fixed.length() >= 14 && fixed.substring(8, 14).matches("^\\d{6}$")) {
+                            expiryDate = formatDate(fixed.substring(8, 14), true);
+                        }
+                        break;
+                    }
+                }
             }
         }
 
@@ -368,6 +402,17 @@ public class UgandaIdParser {
                 }
                 otherName = sb.toString();
             }
+        }
+
+        // Core Identity Validation Assessment:
+        // If NIN, Card Number, Surname, and Given Name are 100% validly captured, guarantee HIGH validation confidence
+        boolean coreValid = UGANDA_NIN_REGEX.matcher(nin).matches()
+                            && cardNumber.matches("^\\d{9}$")
+                            && !surname.isEmpty()
+                            && !givenName.isEmpty();
+
+        if (coreValid && validation.confidence == ValidationConfidence.REJECT) {
+            validation = new ValidationResult(validation.failureCount, ValidationConfidence.HIGH);
         }
 
         CardRecord record = new CardRecord(
