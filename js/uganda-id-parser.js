@@ -371,45 +371,13 @@ export class UgandaIdParser {
             const m2 = UgandaIdParser.LINE2_REGEX.exec(line2);
             if (m2) {
                 dob = UgandaIdParser.formatDate(m2[1]);
+
                 const sexChar = m2[3];
                 if (sexChar === 'F') sex = 'Female';
                 else if (sexChar === 'M') sex = 'Male';
+
                 expiryDate = UgandaIdParser.formatDate(m2[4]);
                 validation = UgandaIdParser.validateCheckDigits(line1, line2);
-            } else {
-                // Fallback 1: Resilient positional extraction from line2
-                if (line2.length >= 6) {
-                    const rawDob = line2.slice(0, 6).replace(/O/g, '0').replace(/I/g, '1').replace(/L/g, '1').replace(/S/g, '5').replace(/B/g, '8').replace(/G/g, '6').replace(/Z/g, '2');
-                    if (/^\d{6}$/.test(rawDob)) {
-                        dob = UgandaIdParser.formatDate(rawDob);
-                    }
-                }
-                if (line2.length >= 8) {
-                    const sChar = line2[7];
-                    if (['F', 'P', 'E'].includes(sChar)) sex = 'Female';
-                    else if (['M', '1', 'I', 'K'].includes(sChar)) sex = 'Male';
-                }
-                if (line2.length >= 14) {
-                    const rawExp = line2.slice(8, 14).replace(/O/g, '0').replace(/I/g, '1').replace(/L/g, '1').replace(/S/g, '5').replace(/B/g, '8').replace(/G/g, '6').replace(/Z/g, '2');
-                    if (/^\d{6}$/.test(rawExp)) {
-                        expiryDate = UgandaIdParser.formatDate(rawExp);
-                    }
-                }
-                validation = UgandaIdParser.validateCheckDigits(line1, line2);
-            }
-        } else {
-            // Fallback 2: Search candidates for DOB pattern
-            for (const cand of candidates) {
-                if (!cand.startsWith('IDUGA') && !cand.includes('<<')) {
-                    const fixed = cand.replace(/[^A-Z0-9]/g, '').replace(/O/g, '0').replace(/I/g, '1').replace(/L/g, '1').replace(/S/g, '5').replace(/B/g, '8').replace(/G/g, '6').replace(/Z/g, '2');
-                    if (fixed.length >= 6 && /^\d{6}$/.test(fixed.slice(0, 6))) {
-                        dob = UgandaIdParser.formatDate(fixed.slice(0, 6));
-                        if (fixed.length >= 14 && /^\d{6}$/.test(fixed.slice(8, 14))) {
-                            expiryDate = UgandaIdParser.formatDate(fixed.slice(8, 14));
-                        }
-                        break;
-                    }
-                }
             }
         }
 
@@ -455,16 +423,6 @@ export class UgandaIdParser {
             }
         }
 
-        // Core Identity Validation Assessment
-        const coreValid = UgandaIdParser.UGANDA_NIN_REGEX.test(nin)
-                          && /^\d{9}$/.test(cardNumber)
-                          && surname.length > 0
-                          && givenName.length > 0;
-
-        if (coreValid && validation.confidence === ValidationConfidence.REJECT) {
-            validation = new ValidationResult(validation.failureCount, ValidationConfidence.HIGH);
-        }
-
         const record = new CardRecord(
             surname, givenName, otherName, sex, dob, nin, cardNumber,
             '', 'Tesseract.js MRZ OCR'
@@ -472,6 +430,7 @@ export class UgandaIdParser {
         record.validationConfidence = validation.confidence;
         record.validationFailures = validation.failureCount;
         record.expiryDate = expiryDate;
+
         return record;
     }
 }
