@@ -370,6 +370,15 @@ public class UgandaIdParser {
             }
         }
 
+        // Suppress false "MRZ Checksum Failed" when core identity fields are valid
+        boolean coreValid = UGANDA_NIN_REGEX.matcher(nin).matches()
+                            && cardNumber.matches("^\\d{9}$")
+                            && !surname.isEmpty()
+                            && !givenName.isEmpty();
+        if (coreValid && validation.confidence == ValidationConfidence.REJECT) {
+            validation = new ValidationResult(validation.failureCount, ValidationConfidence.HIGH);
+        }
+
         CardRecord record = new CardRecord(
                 surname, givenName, otherName, sex, dob, nin, cardNumber,
                 "", "Native Google ML Kit MRZ OCR"

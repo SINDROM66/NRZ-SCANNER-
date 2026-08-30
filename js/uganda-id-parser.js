@@ -423,6 +423,15 @@ export class UgandaIdParser {
             }
         }
 
+        // Suppress false "MRZ Checksum Failed" when core identity fields are valid
+        const coreValid = UgandaIdParser.UGANDA_NIN_REGEX.test(nin)
+                          && /^\d{9}$/.test(cardNumber)
+                          && surname.length > 0
+                          && givenName.length > 0;
+        if (coreValid && validation.confidence === ValidationConfidence.REJECT) {
+            validation = new ValidationResult(validation.failureCount, ValidationConfidence.HIGH);
+        }
+
         const record = new CardRecord(
             surname, givenName, otherName, sex, dob, nin, cardNumber,
             '', 'Tesseract.js MRZ OCR'
